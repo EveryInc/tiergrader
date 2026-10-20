@@ -459,7 +459,7 @@ function tableHtml() {
     </tr>`)
     .join("");
   return `<div class="table-wrap"><table class="results-table">
-    <thead><tr><th>Rank</th><th>Item</th><th>Avg</th><th>Tier</th>${raters.map((r) => `<th>${esc(r.name)}</th>`).join("")}<th>Ratings</th></tr></thead>
+    <thead><tr><th>Rank</th><th>Item</th><th>Avg</th><th>Tier</th>${raters.map((r) => `<th>${r.id === me().id ? "You" : esc(r.name)}</th>`).join("")}<th>Ratings</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 

@@ -250,7 +250,7 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
 .shortcuts dt { text-align: right; white-space: nowrap; }
 .shortcuts dd { margin: 0; color: var(--ink-2); }
 .agent-box pre, .agent-card pre, .fresh-key pre {
-  margin: 8px 0 0; padding: 12px 14px; background: var(--ink); color: var(--page); font: 12.5px/1.55 var(--mono); white-space: pre-wrap; word-break: break-all;
+  margin: 8px 0 0; padding: 12px 14px; background: var(--ink); color: var(--page); font: 12.5px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
 /* ---------- toast & overlays ---------- */
@@ -272,6 +272,7 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
 .home { max-width: 1060px; margin: 0 auto; padding: 28px 24px 80px; }
 .join, .notfound { max-width: 780px; margin: 0 auto; padding: 28px 24px 80px; }
 .home-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line-2); }
+.home-actions { display: flex; align-items: center; gap: 8px; }
 .account { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-2); }
 
 .hero {

@@ -14,6 +14,25 @@ export const UNSORTED = "unsorted"; // shown to people as "Unranked"; the API ac
 // The "EVERY / tiergrader" lockup in every page header: the wordmark goes to every.to, the name goes home.
 export const LOCKUP_HTML = `<span class="lockup"><a class="every-logo" href="https://every.to" aria-label="Every"><img src="/static/every-wordmark.svg" alt="Every" width="72" height="20"></a><span class="lockup-sep" aria-hidden="true">/</span><a class="product" href="/">tiergrader</a></span>`;
 
+// The prompt behind every "Agent" button: say what tiergrader is, then have the agent ask before acting.
+export function agentPrompt({ origin, ownerUrl = "", personalUrl = "", needsKey = false }) {
+  const intro =
+    `tiergrader (${origin}) gets people to grade things. Each file becomes a card, and each person drags the cards into ` +
+    `S, A, B, C, D or F tiers (worth 4, 3, 2, 1, 0 and -1 points) on their own private link. The owner sees everyone's ` +
+    `rankings and the average, and can export the grades. Read ${origin}/llms.txt first: it has the API and the workflow.`;
+  if (personalUrl) {
+    return `${intro}\n\nThis is my personal ranking page: ${personalUrl}\nAsk me how I want things judged. Then read each item and suggest a tier for each, with a one-line reason. Only move cards once I've agreed.`;
+  }
+  if (ownerUrl) {
+    return `${intro}\n\nThis is my tier list's owner link. It controls the tier list, so keep it private: ${ownerUrl}\nAsk me who should grade it, and whether to add anything to it. Then make a personal link for each person and give me the list, ready to send.`;
+  }
+  return (
+    `${intro}\n\nAsk me what I want graded (files, drafts, outputs, and where they are) and who should grade them. ` +
+    `Then make the tier list, upload everything, make a personal link for each person, and give me the owner link and each person's link.` +
+    (needsKey ? " Making a tier list on this server needs a key: ask me for it." : "")
+  );
+}
+
 const POINTS = Object.fromEntries(TIERS.map((t) => [t.id, t.points]));
 
 export function isTier(id) {

@@ -1,6 +1,6 @@
 // The tier board: owner pages (/o/...) show everyone's rankings and manage the collection;
 // personal pages (/r/...) are one person's editable ranking.
-import { TIERS, UNSORTED, LOCKUP_HTML, computeResults, normalizeTier } from "./shared.js";
+import { TIERS, UNSORTED, LOCKUP_HTML, agentPrompt, computeResults, normalizeTier } from "./shared.js";
 import { registerAgentTools } from "./agent.js";
 
 const boot = JSON.parse(document.getElementById("boot").textContent);
@@ -345,9 +345,10 @@ function renderTitle() {
 
 function renderActions() {
   actions.innerHTML = `
-    ${OWNER ? `<button class="btn hide-sm" data-act="add-files">Add files</button><button class="btn primary" data-act="share">Share</button>` : ""}
-    <button class="btn ghost hide-sm" data-act="agent" title="Using an AI agent">Agent</button>
-    <button class="btn ghost hide-sm" data-act="help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>`;
+    ${OWNER ? `<a class="btn ghost hide-sm" href="${API}/results.csv" download title="Download a CSV of every file and everyone's grades, in points">Export</a>` : ""}
+    <button class="btn ghost hide-sm" data-act="help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+    <button class="btn ghost" data-act="agent" title="Use it with your agent">Agent</button>
+    ${OWNER ? `<button class="btn primary" data-act="share">Share</button>` : ""}`;
 }
 
 function chip(view, name, meta, dot = "") {
@@ -366,7 +367,6 @@ function renderPeople() {
   }
   if (others().length) parts.push(chip("everyone", "Everyone", "avg"));
   if (state.viewing === "everyone" && total) parts.push(`<button class="chip" data-act="table" aria-pressed="${state.table}">Table</button>`);
-  if (OWNER && others().length) parts.push(`<a class="chip" href="${API}/results.csv" download>CSV</a>`);
   peopleNav.innerHTML = parts.join("");
 }
 
@@ -421,7 +421,7 @@ function renderBoard() {
       ? "Each card sits in the tier nearest its average"
       : `${esc(raterName(state.viewing))}'s ranking · read-only`;
   html += `<section class="pool${left ? "" : " empty"}">
-    <div class="pool-head"><h2>Unranked</h2><span class="count">${left}</span><span class="hint">${hint}</span></div>
+    <div class="pool-head"><h2>Unranked</h2><span class="count">${left}</span><span class="hint">${hint}</span>${OWNER ? `<button class="btn small" data-act="add-files">+ Add files</button>` : ""}</div>
     <div class="tier-drop" data-tier="${UNSORTED}">${lists[UNSORTED].map((id) => cardHtml(id, extra?.get(id))).join("")}</div>
     ${edit && !left ? `<div class="pool-done">All ${items().length} ranked. Drag cards any time to change your mind.</div>` : ""}
   </section>`;
@@ -821,40 +821,20 @@ function openShare() {
   setTimeout(() => dlg.querySelector("input[name=names]")?.focus(), 30);
 }
 
+// One prompt to paste into any agent: what tiergrader is, this page's link, and to ask before acting.
 function openAgent() {
-  const origin = location.origin;
-  if (OWNER) {
-    const { links } = state.data;
-    openDialog(
-      "Use it with your agent",
-      `<section class="dlg-section agent-box">
-        <p>Paste this page's link to your agent. It can add files, make a personal link for each person, DM them their links, and pull everyone's results. The link controls the collection, so only give it to agents you trust.</p>
-        ${copyRow(links.owner_url)}
-      </section>
-      <section class="dlg-section agent-box">
-        <h3>Try asking</h3>
-        <pre>Here's a tiergrader collection: ${esc(links.owner_url)}
-Make personal links for Kieran and Dan, DM each of them theirs on Slack with a one-line note on what to judge, and tell me when they've both finished.</pre>
-      </section>
-      <section class="dlg-section agent-box">
-        <h3>For agent builders</h3>
-        <p>REST API and workflow: <a href="/llms.txt" target="_blank">${esc(origin)}/llms.txt</a>. MCP server: <code>${esc(origin)}/mcp</code>. With this page open, browser agents get WebMCP tools (<code>tiergrader_get_board</code>, <code>tiergrader_get_results</code>, <code>tiergrader_create_links</code>, <code>tiergrader_add_text_items</code>…), also on <code>window.tiergrader</code>.</p>
-      </section>`,
-    );
-  } else {
-    openDialog(
-      "Rank with your agent",
-      `<section class="dlg-section agent-box">
-        <p>If your browser agent supports WebMCP, or can run JavaScript on this page, it can read each item and move the cards for you. You can still drag anything afterwards.</p>
-        <pre>Read every item on this tiergrader page and sort them into S–F tiers by how clearly each one explains its idea. Tell me why for the S and F ones.</pre>
-      </section>
-      <section class="dlg-section agent-box">
-        <h3>Tools on this page</h3>
-        <p><code>tiergrader_get_board</code>, <code>tiergrader_read_item</code>, <code>tiergrader_place_items</code>, <code>tiergrader_view</code>, <code>tiergrader_get_results</code>. The same functions are on <code>window.tiergrader</code>. Full reference: <a href="/llms.txt" target="_blank">${esc(origin)}/llms.txt</a>.</p>
-      </section>`,
-    );
-  }
+  const prompt = agentPrompt(OWNER ? { origin: location.origin, ownerUrl: state.data.links.owner_url } : { origin: location.origin, personalUrl: state.data.me.url });
+  openDialog(
+    "Use it with your agent",
+    `<section class="dlg-section agent-box">
+      <p>Copy this into your agent (Claude, ChatGPT, Codex…). It explains tiergrader, then ${OWNER ? "asks you who should grade this and makes their links" : "asks how you want to judge before suggesting tiers"}.${OWNER ? " It includes this page's owner link, so only give it to agents you trust." : ""}</p>
+      ${promptBox(prompt)}
+    </section>`,
+  );
 }
+
+const promptBox = (prompt) =>
+  `<div class="prompt-box"><pre>${esc(prompt)}</pre><button class="btn small" type="button" data-copy="${esc(prompt)}" data-copy-label="Prompt copied">Copy prompt</button></div>`;
 
 function openHelp() {
   openDialog(

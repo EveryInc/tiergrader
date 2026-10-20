@@ -90,8 +90,9 @@ test("create, upload, invite, rank, results", async () => {
   assert.deepEqual(hook.ratings.map((x) => [x.name, x.tier]).sort(), [["Dan", "B"], ["Kieran", "S"]]);
 
   const csv = (await call("GET", `${api}/results.csv`)).body;
-  assert.match(csv.split("\n")[0], /^rank,n,title,average,ratings,consensus,Kieran,Dan$/);
-  assert.match(csv, /\n1,2,two,4,1,S,S,\n/);
+  assert.match(csv.split("\n")[0], /^rank,file,title,average,Kieran,Dan$/);
+  assert.match(csv, /\n1,two\.txt,two,4,4,\n/);
+  assert.match(csv, /,one\.md,Hook one,3,4,2\n/);
 });
 
 test("bad moves are rejected without partial writes", async () => {
@@ -225,7 +226,7 @@ test("CSV export defuses formulas but keeps negative numbers", async () => {
   const csv = (await call("GET", `${api}/results.csv`)).body;
   assert.match(csv, /"'=HYPERLINK\(""http:\/\/evil""\)"/);
   assert.match(csv, /,'\+cmd,/);
-  assert.match(csv, /,-1,1,F,F,/);
+  assert.match(csv, /,one\.md,Hook one,-1,-1,/);
 });
 
 test("a join name with line breaks makes one person", async () => {

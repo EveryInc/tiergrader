@@ -1,5 +1,5 @@
 // Home: sign in (when the server uses Every sign-in), create a collection, your collections, agent keys.
-import { LOCKUP_HTML } from "./shared.js";
+import { LOCKUP_HTML, agentPrompt } from "./shared.js";
 import { startDemo } from "./demo.js";
 
 const REPO = "https://github.com/EveryInc/tiergrader";
@@ -25,7 +25,8 @@ const ago = (t) => {
 };
 
 const rated = read("tg.rated");
-const AGENT_PROMPT = `Read ${location.origin}/llms.txt, then make a tiergrader collection from the posts in ./drafts and DM Kieran and Dan their ranking links on Slack.`;
+const AGENT_PROMPT = agentPrompt({ origin: location.origin, needsKey: boot.auth !== "open" });
+let agentKeys = [];
 const staged = [];
 const main = document.getElementById("home");
 const SIGNIN_ERRORS = {
@@ -71,7 +72,10 @@ const gate = !user
 main.innerHTML = `
   <header class="home-top">
     ${LOCKUP_HTML}
-    ${account}
+    <div class="home-actions">
+      <button class="btn ghost" type="button" data-act="agent">Agent</button>
+      ${account}
+    </div>
   </header>
   ${signinError ? `<div class="notice error">${esc(signinError)}</div>` : ""}
   <section class="hero">
@@ -86,15 +90,6 @@ main.innerHTML = `
   <div data-owned></div>
   ${rated.length ? `<div class="section-title">Rankings you're part of</div><div class="link-list">${rated.map((x) => `<a href="${esc(x.url)}"><span>${esc(x.title)}</span><small>as ${esc(x.name)} · ${ago(x.at)}</small></a>`).join("")}</div>` : ""}
 
-  <div class="section-title">Using an agent?</div>
-  <div class="panel agent-card">
-    <p>Agents can do all of this for you: make a collection, upload the files, make a personal link for each person and DM it to them, then pull everyone's rankings. Give yours this:</p>
-    <div class="prompt-box">
-      <pre>${esc(AGENT_PROMPT)}</pre>
-      <button class="btn primary small" type="button" data-copy="${esc(AGENT_PROMPT)}" data-copied="Copied">Copy prompt</button>
-    </div>
-    <div data-agents></div>
-  </div>
   <footer class="home-foot">tiergrader is <a href="${REPO}">open source</a> (MIT)${EVERY ? ` · An <a href="https://every.to">Every</a> experiment` : ""}</footer>`;
 
 // ---------- your collections ----------
@@ -105,7 +100,7 @@ async function renderOwned() {
   if (EVERY && user) {
     const me = await fetch("/api/me").then((r) => r.json()).catch(() => null);
     list = (me?.collections || []).map((c) => ({ url: new URL(c.owner_url).pathname, title: c.title, meta: `${c.items} items · ${c.people} people · ${ago(c.created_at)}` }));
-    renderKeys(me?.agent_keys || []);
+    agentKeys = me?.agent_keys || [];
   } else {
     list = read("tg.owned").map((x) => ({ url: x.url, title: x.title, meta: `owner · ${ago(x.at)}` }));
   }
@@ -118,10 +113,12 @@ async function renderOwned() {
 
 function renderKeys(keys, fresh = null) {
   if (!(EVERY && user?.subscriber)) return;
-  const box = main.querySelector("[data-agents]");
+  const box = document.querySelector("dialog [data-agents]");
+  if (!box) return;
   const origin = location.origin;
   box.innerHTML = `
-    <p style="margin:18px 0 10px">On this server, agents need an agent key to make collections. Make one for each agent you use.</p>
+    <h3>Agent keys</h3>
+    <p>On this server, agents need a key to make tier lists. Make one for each agent you use, and give it the key when it asks.</p>
     ${fresh ? `<div class="fresh-key">
       <strong>Copy this key now. It won't be shown again.</strong>
       <div class="copy-row"><input class="input" readonly data-select value="${esc(fresh.key)}"><button class="btn" type="button" data-copy="${esc(fresh.key)}">Copy</button></div>
@@ -147,11 +144,36 @@ claude mcp add --transport http tiergrader ${esc(origin)}/mcp --header "Authoriz
     const out = await res.json();
     if (!res.ok) return alert(out.error);
     const me = await fetch("/api/me").then((r) => r.json());
-    renderKeys(me.agent_keys, out);
+    agentKeys = me.agent_keys;
+    renderKeys(agentKeys, out);
   });
 }
 
-main.addEventListener("click", async (e) => {
+// ---------- the Agent dialog: one prompt to paste into any agent (plus agent keys, when signed in) ----------
+
+function openAgent() {
+  document.querySelector("dialog")?.remove();
+  const dlg = document.createElement("dialog");
+  dlg.innerHTML = `
+    <div class="dlg-head"><h2>Use it with your agent</h2><button class="icon-btn" type="button" data-close aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <section class="dlg-section agent-box">
+        <p>Copy this into your agent (Claude, ChatGPT, Codex…). It explains tiergrader, asks you what to grade and who should grade it, then makes the tier list and gives you the links.</p>
+        <div class="prompt-box"><pre>${esc(AGENT_PROMPT)}</pre><button class="btn small" type="button" data-copy="${esc(AGENT_PROMPT)}">Copy prompt</button></div>
+      </section>
+      ${EVERY && user?.subscriber ? `<section class="dlg-section" data-agents></section>` : ""}
+    </div>`;
+  document.body.append(dlg);
+  dlg.addEventListener("click", (e) => {
+    if (e.target === dlg || e.target.closest("[data-close]")) dlg.close();
+  });
+  dlg.addEventListener("close", () => dlg.remove());
+  dlg.showModal();
+  renderKeys(agentKeys);
+}
+
+document.addEventListener("click", async (e) => {
+  if (e.target.closest('[data-act="agent"]')) return openAgent();
   const copyBtn = e.target.closest("[data-copy]");
   if (copyBtn) {
     await navigator.clipboard.writeText(copyBtn.dataset.copy).catch(() => {});
@@ -163,7 +185,8 @@ main.addEventListener("click", async (e) => {
   if (del && confirm("Delete this key? Agents using it stop working.")) {
     await fetch(`/api/me/agent-keys/${del.dataset.deleteKey}`, { method: "DELETE" });
     const me = await fetch("/api/me").then((r) => r.json());
-    renderKeys(me.agent_keys);
+    agentKeys = me.agent_keys;
+    renderKeys(agentKeys);
   }
 });
 

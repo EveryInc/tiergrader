@@ -61,7 +61,7 @@ ${CREATE_AUTH[mode](base)}
 
    \`\`\`sh
    curl -s {api_url}/results       # JSON: every item's average and rank, each person's tier for it, and each person's full board
-   curl -s {api_url}/results.csv   # one row per item, one column per person
+   curl -s {api_url}/results.csv   # one row per file (name, title, average), one column per person, grades in points
    \`\`\`
 
 ## Owner API (\`{api_url}\` = \`${base}/api/o/{owner_token}\`)
@@ -80,7 +80,7 @@ ${CREATE_AUTH[mode](base)}
 | \`DELETE {api_url}/raters/{id}\` | Remove a person and their ranking |
 | \`POST {api_url}/place\` | The owner's own ranking: \`{"moves": [{"item_id", "tier", "position"}]}\`, as on a personal link. It only counts in results once it has something in it |
 | \`GET {api_url}/results\` | Averages, ranks and each person's board |
-| \`GET {api_url}/results.csv\` | The same as a spreadsheet |
+| \`GET {api_url}/results.csv\` | Export: one row per file with its name, title and average, and each person's grade in points (S 4 … F -1) |
 
 Item files are at \`${base}/f/{item_id}\`.
 

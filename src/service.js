@@ -152,10 +152,13 @@ export function createService(store, { broadcast = () => {} } = {}) {
         if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
         return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
       };
-      const header = ["rank", "n", "title", "average", "ratings", "consensus", ...raters.map((r) => r.name)];
+      // One row per file, best first: its name, title and average, then each person's grade in points.
+      const files = new Map(items.map((it) => [it.id, it.filename || it.url || ""]));
+      const header = ["rank", "file", "title", "average", ...raters.map((r) => r.name)];
       const lines = [header.map(esc).join(",")];
       for (const row of results.items) {
-        lines.push([row.rank, row.n, row.title, row.avg, row.count, row.avg === null ? "" : row.tier, ...raters.map((r) => row.ratings[r.id] || "")].map(esc).join(","));
+        const grades = raters.map((r) => (row.ratings[r.id] ? SCORING[row.ratings[r.id]] : ""));
+        lines.push([row.rank, files.get(row.id), row.title, row.avg, ...grades].map(esc).join(","));
       }
       return lines.join("\n") + "\n";
     },

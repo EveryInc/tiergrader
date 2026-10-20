@@ -8,7 +8,7 @@ Built for the "a human with taste has to judge this" part of evals: AI-written b
 
 ## Use it
 
-The hosted version is for **Every subscribers**: sign in with your Every account to make collections. The people you send links to can rank without any account.
+**Hosted at [tiergrader.onrender.com](https://tiergrader.onrender.com)**, for **Every subscribers**: sign in with your Every account to make collections. The people you send links to can rank without any account.
 
 Not a subscriber? tiergrader is open source under the [MIT license](LICENSE), so feel free to run your own:
 

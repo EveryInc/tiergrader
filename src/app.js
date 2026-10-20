@@ -4,7 +4,9 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openStore, httpError, LIMITS } from "./store.js";
-import { createAuth, isSubscriber } from "./auth.js";
+import { createAuth, isSubscriber, parseCookies } from "./auth.js";
+import { ensureExamples, exampleBySlug } from "./examples.js";
+import { EXAMPLES } from "../public/examples.js";
 import { createService } from "./service.js";
 import { createMcpHandler } from "./mcp.js";
 import { llmsTxt, ownerBrief, raterBrief } from "./agent-docs.js";
@@ -75,11 +77,13 @@ export function createApp({
     scope: process.env.EVERY_OAUTH_SCOPE || "basic_profile",
   },
   allowOpen = process.env.ALLOW_OPEN_CREATE === "1",
+  seedExamples = true,
   hosted = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RENDER),
 } = {}) {
   checkConfig({ every, createKey, publicUrl, allowOpen, hosted });
   const store = openStore(dataDir);
   const auth = createAuth({ store, every, createKey, publicUrl });
+  if (seedExamples) ensureExamples(store, (line) => console.log(line));
 
   // collection id -> open event streams
   const streams = new Map();
@@ -287,7 +291,26 @@ export function createApp({
     if (method === "GET" || method === "HEAD") {
       if (path === "/") {
         const user = auth.currentUser(req);
-        return html(res, 200, homePage(base, { auth: auth.mode, user: user && publicUser(user) }));
+        const examples = EXAMPLES.filter((ex) => store.exampleCollection(`${ex.slug}@${ex.version}`)).map((ex) => ({ slug: ex.slug, name: ex.name, title: ex.title, count: ex.items.length }));
+        return html(res, 200, homePage(base, { auth: auth.mode, user: user && publicUser(user), examples }));
+      }
+      // Try an example: each visitor gets their own guest ranking, kept for them in a cookie.
+      if ((m = path.match(/^\/try\/([a-z0-9-]+)$/))) {
+        const ex = exampleBySlug(m[1]);
+        const c = ex && store.exampleCollection(`${ex.slug}@${ex.version}`);
+        if (!c) return html(res, 404, notFoundPage("There's no example by that name."));
+        const cookieName = `tg_try_${ex.slug.replace(/-/g, "_")}`;
+        const mine = store.raterByToken(parseCookies(req.headers.cookie)[cookieName] || "");
+        if (mine && mine.collection_id === c.id) return send(res, 303, "", { location: `/r/${mine.token}`, "cache-control": "no-store" });
+        if (tooMany(req, "join", 30)) throw httpError(429, "Too many from here. Try again in a minute.");
+        store.pruneGuests(c.id);
+        const r = store.addRater(c.id, "You", { guest: true });
+        const secure = base.startsWith("https://") ? "; Secure" : "";
+        return send(res, 303, "", {
+          location: `/r/${r.token}`,
+          "set-cookie": `${cookieName}=${r.token}; Path=/try; Max-Age=${14 * 86400}; HttpOnly; SameSite=Lax${secure}`,
+          "cache-control": "no-store",
+        });
       }
       if (path === "/healthz") return json(res, 200, { ok: true });
       if (path === "/llms.txt" || path === "/agents.md") return markdown(res, llmsTxt(base, auth.mode));

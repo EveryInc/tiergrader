@@ -8,7 +8,7 @@ Built for the "a human with taste has to judge this" part of evals: AI-written b
 
 ## Use it
 
-**Hosted at [tiergrader.onrender.com](https://tiergrader.onrender.com)**, for **Every subscribers**: sign in with your Every account to make collections. The people you send links to can rank without any account.
+**Hosted at [tiergrader.onrender.com](https://tiergrader.onrender.com)**, for **Every subscribers**: sign in with your Every account to make tier grades. The people you send links to can rank without any account. Anyone can try the three example tier grades (blog intros, logos, landing pages) on the home page first.
 
 Not a subscriber? tiergrader is open source under the [MIT license](LICENSE), so feel free to run your own:
 
@@ -30,6 +30,7 @@ No dependencies to install: Node 24+ (`node:sqlite`, `node:http`). The page load
 - **Scoring:** S 4 · A 3 · B 2 · C 1 · D 0 · F −1. Unplaced cards don't count. The "Everyone" view puts each card in the tier nearest its average (ties round up) and shows each person's vote on it; "Table" lists them all.
 - **Live:** open pages update as people rank, files are added, or links are made.
 - People can see each other's rankings by default; the owner can turn that off in Share.
+- **Examples:** three example tier grades are seeded at startup (`public/examples.js`, also acted out by the landing-page demo). `/try/<slug>` gives each visitor a private guest ranking next to Dan's and Kate's; guests never see each other, and are cleared after two weeks.
 - Raters never see file names, so for a blind comparison give the cards neutral titles ("Post A").
 
 ## Keyboard
@@ -56,10 +57,10 @@ Set by environment variables; ranking never needs an account.
 | Setup | Who can create |
 |---|---|
 | `EVERY_OAUTH_CLIENT_ID` + `EVERY_OAUTH_CLIENT_SECRET` (+ `PUBLIC_URL`) | Every subscribers, after signing in with Every. Agents use **agent keys** a subscriber makes on the home page (`Authorization: Bearer tg_…`); a key keeps working while its owner has signed in within the last 30 days. |
-| `CREATE_KEY` only | Anyone with that one shared key (`x-create-key` header). |
+| `CREATE_KEY` only | Anyone with that one shared password (the `x-create-key` header; the home page asks for it). |
 | Neither | Anyone. Fine on your own machine; on Railway or behind https it refuses to start unless you also set `ALLOW_OPEN_CREATE=1`. |
 
-`CREATE_KEY` also works alongside Every sign-in, as an operator override. Every sign-in is OAuth2 against every.to (PKCE, scope `basic_profile`); tiergrader keeps who you are and whether you subscribe, and drops Every's access token.
+`CREATE_KEY` (the password) also works alongside Every sign-in, as an operator override. Every sign-in is OAuth2 against every.to (PKCE, scope `basic_profile`); tiergrader keeps who you are and whether you subscribe, and drops Every's access token.
 
 Getting an Every OAuth client: ask the Every team to provision one with the redirect URI `<PUBLIC_URL>/auth/every/callback` (exactly, no query string) and the scope `basic_profile`.
 

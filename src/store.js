@@ -168,6 +168,11 @@ export function openStore(dataDir) {
     db.exec("ALTER TABLE collections ADD COLUMN owner_user_id TEXT; CREATE INDEX IF NOT EXISTS collections_by_owner ON collections(owner_user_id, created_at);");
   }
   if (!collectionColumns.includes("owner_rater_id")) db.exec("ALTER TABLE collections ADD COLUMN owner_rater_id TEXT;");
+  // Example tier grades anyone can try; visitors grade them as guests, hidden from each other.
+  if (!collectionColumns.includes("example_slug")) db.exec("ALTER TABLE collections ADD COLUMN example_slug TEXT;");
+  if (!db.prepare("PRAGMA table_info(raters)").all().some((c) => c.name === "guest")) {
+    db.exec("ALTER TABLE raters ADD COLUMN guest INTEGER NOT NULL DEFAULT 0;");
+  }
 
   const now = () => new Date().toISOString();
   const q = (sql) => db.prepare(sql);
@@ -199,6 +204,24 @@ export function openStore(dataDir) {
       q(`INSERT INTO collections (id, title, description, owner_token, invite_code, created_at, updated_at, owner_user_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(row.id, row.title, row.description, row.owner_token, row.invite_code, row.created_at, row.created_at, ownerUserId);
       return store.getCollection(row.id);
+    },
+
+    // ----- example tier grades -----
+
+    exampleCollection(tag) {
+      return q("SELECT * FROM collections WHERE example_slug = ?").get(tag);
+    },
+    setExample(collectionId, tag) {
+      q("UPDATE collections SET example_slug = ? WHERE id = ?").run(tag, collectionId);
+    },
+    // Old versions of an example go away when its content changes.
+    dropOtherExampleVersions(slug, keepTag) {
+      q("DELETE FROM collections WHERE example_slug LIKE ? AND example_slug != ?").run(`${slug}@%`, keepTag);
+    },
+    // Guests who tried an example more than two weeks ago, and the oldest beyond 400, are cleared out.
+    pruneGuests(collectionId) {
+      q("DELETE FROM raters WHERE collection_id = ? AND guest = 1 AND created_at < ?").run(collectionId, new Date(Date.now() - 14 * 86400_000).toISOString());
+      q(`DELETE FROM raters WHERE id IN (SELECT id FROM raters WHERE collection_id = ? AND guest = 1 ORDER BY created_at DESC LIMIT -1 OFFSET 400)`).run(collectionId);
     },
 
     collectionsOfUser(userId) {
@@ -330,14 +353,14 @@ export function openStore(dataDir) {
       touch(collectionId);
     },
 
-    addRater(collectionId, name) {
+    addRater(collectionId, name, { guest = false } = {}) {
       name = String(name || "").trim().replace(/\s+/g, " ").slice(0, LIMITS.nameChars);
       if (!name) throw httpError(400, "A name is required.");
-      const count = q("SELECT COUNT(*) AS n FROM raters WHERE collection_id = ?").get(collectionId).n;
-      if (count >= LIMITS.ratersPerCollection) throw httpError(400, "This collection has too many people.");
+      const count = q("SELECT COUNT(*) AS n FROM raters WHERE collection_id = ? AND guest = 0").get(collectionId).n;
+      if (!guest && count >= LIMITS.ratersPerCollection) throw httpError(400, "This collection has too many people.");
       const r = { id: token(10), token: token(16), created_at: now() };
-      q("INSERT INTO raters (id, collection_id, name, token, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(r.id, collectionId, name, r.token, r.created_at, r.created_at);
+      q("INSERT INTO raters (id, collection_id, name, token, created_at, updated_at, guest) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(r.id, collectionId, name, r.token, r.created_at, r.created_at, guest ? 1 : 0);
       touch(collectionId);
       return q("SELECT * FROM raters WHERE id = ?").get(r.id);
     },

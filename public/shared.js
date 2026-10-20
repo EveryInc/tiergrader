@@ -24,12 +24,12 @@ export function agentPrompt({ origin, ownerUrl = "", personalUrl = "", needsKey 
     return `${intro}\n\nThis is my personal ranking page: ${personalUrl}\nAsk me how I want things judged. Then read each item and suggest a tier for each, with a one-line reason. Only move cards once I've agreed.`;
   }
   if (ownerUrl) {
-    return `${intro}\n\nThis is my tier list's owner link. It controls the tier list, so keep it private: ${ownerUrl}\nAsk me who should grade it, and whether to add anything to it. Then make a personal link for each person and give me the list, ready to send.`;
+    return `${intro}\n\nThis is my tier grade's owner link. It controls the tier grade, so keep it private: ${ownerUrl}\nAsk me who should grade it, and whether to add anything to it. Then make a personal link for each person and give me the list, ready to send.`;
   }
   return (
     `${intro}\n\nAsk me what I want graded (files, drafts, outputs, and where they are) and who should grade them. ` +
-    `Then make the tier list, upload everything, make a personal link for each person, and give me the owner link and each person's link.` +
-    (needsKey ? " Making a tier list on this server needs a key: ask me for it." : "")
+    `Then make the tier grade, upload everything, make a personal link for each person, and give me the owner link and each person's link.` +
+    (needsKey ? " Making a tier grade on this server needs a password or key: ask me for it." : "")
   );
 }
 

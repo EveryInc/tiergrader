@@ -93,7 +93,8 @@ export function createService(store, { broadcast = () => {} } = {}) {
     raterView(rater, base) {
       const c = store.getCollection(rater.collection_id);
       const { items, raters, placements } = snapshot(c);
-      const visible = c.show_others ? raters : [rater];
+      // Guests (people trying an example) see the example's own graders, never each other.
+      const visible = c.show_others ? raters.filter((r) => !r.guest || r.id === rater.id) : [rater];
       const ids = new Set(visible.map((r) => r.id));
       const results = computeResults(items, visible, placements.filter((p) => ids.has(p.rater_id)));
       const progress = new Map(results.raters.map((r) => [r.id, r.ranked]));

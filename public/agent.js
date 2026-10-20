@@ -22,7 +22,7 @@ export function registerAgentTools(ctrl) {
     {
       name: "tiergrader_get_board",
       description:
-        "See the tier list on this page: what the collection is, whose ranking is shown, and which items are in each tier (S=4, A=3, B=2, C=1, D=0, F=-1 points) or still unranked. Call this first.",
+        "See the tier grade on this page: what the collection is, whose ranking is shown, and which items are in each tier (S=4, A=3, B=2, C=1, D=0, F=-1 points) or still unranked. Call this first.",
       inputSchema: { type: "object", properties: {} },
       annotations: { readOnlyHint: true },
       execute: async () => json(ctrl.getBoard()),

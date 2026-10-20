@@ -1,6 +1,7 @@
 // Home: sign in (when the server uses Every sign-in), create a collection, your collections, agent keys.
 import { LOCKUP_HTML, agentPrompt } from "./shared.js";
 import { startDemo } from "./demo.js";
+import { EXAMPLES } from "./examples.js";
 
 const REPO = "https://github.com/EveryInc/tiergrader";
 const boot = JSON.parse(document.getElementById("boot")?.textContent || "{}");
@@ -45,13 +46,13 @@ const account = !EVERY
 const createForm = `
   <form class="create-form" novalidate>
     <div class="dropzone" tabindex="0" role="button" aria-label="Choose files">
-      <strong>Drop files to make a tier list</strong>
+      <strong>Drop files to make a tier grade</strong>
       <span>or <u>choose files</u>: posts, images, PDFs, HTML pages, anything</span>
       <div class="staged"></div>
     </div>
     <div class="create-row">
       <input class="input" name="title" placeholder="Name it (optional)" autocomplete="off" aria-label="Name (optional)">
-      <button class="btn primary" type="submit">Create tier list</button>
+      <button class="btn primary" type="submit">Create tier grade</button>
     </div>
   </form>`;
 
@@ -73,24 +74,48 @@ main.innerHTML = `
   <header class="home-top">
     ${LOCKUP_HTML}
     <div class="home-actions">
-      <button class="btn ghost" type="button" data-act="agent">Agent</button>
+      <button class="btn" type="button" data-act="agent">Agent</button>
       ${account}
     </div>
   </header>
   ${signinError ? `<div class="notice error">${esc(signinError)}</div>` : ""}
   <section class="hero">
     <div class="hero-copy">
-      <h1>Drop in files.<br>Get everyone's tier list.</h1>
+      <h1><span>Drop in files.</span> <span>Get everyone's tier grades.</span></h1>
       <p>Upload blog posts, designs, screenshots, anything. Share a link. Each person drags every card into S, A, B, C, D or F, and you see how each of them ranked it, and the average.</p>
     </div>
     <div class="demo" aria-hidden="true"></div>
     <div class="hero-form">${canCreate ? createForm : gate}</div>
   </section>
 
+  ${examplesHtml()}
   <div data-owned></div>
   ${rated.length ? `<div class="section-title">Rankings you're part of</div><div class="link-list">${rated.map((x) => `<a href="${esc(x.url)}"><span>${esc(x.title)}</span><small>as ${esc(x.name)} · ${ago(x.at)}</small></a>`).join("")}</div>` : ""}
 
   <footer class="home-foot">tiergrader is <a href="${REPO}">open source</a> (MIT)${EVERY ? ` · An <a href="https://every.to">Every</a> experiment` : ""}</footer>`;
+
+// ---------- examples anyone can try before making their own ----------
+
+function examplesHtml() {
+  const live = new Set((boot.examples || []).map((ex) => ex.slug));
+  const list = EXAMPLES.filter((ex) => live.has(ex.slug));
+  if (!list.length) return "";
+  const thumb = (it) =>
+    it.svg
+      ? `<i class="ex-thumb logo"><img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(it.svg)}" alt=""></i>`
+      : it.accent
+        ? `<i class="ex-thumb page" style="background:${it.accent}"><b class="bars${["#5b3be8", "#121212", "#1a2ee1"].includes(it.accent) ? " light" : ""}"></b></i>`
+        : `<i class="ex-thumb">${esc(it.title)}</i>`;
+  return `<div class="section-title">Try one first</div>
+    <div class="example-grid">${list
+      .map((ex) => `<a class="example" href="/try/${ex.slug}">
+        <span class="ex-thumbs">${ex.items.slice(0, 4).map(thumb).join("")}</span>
+        <strong>${esc(ex.title)}</strong>
+        <small>${ex.items.length} ${esc(ex.name.toLowerCase())} · already graded by Dan and Kate</small>
+        <span class="ex-go">Grade it →</span>
+      </a>`)
+      .join("")}</div>`;
+}
 
 // ---------- your collections ----------
 
@@ -118,7 +143,7 @@ function renderKeys(keys, fresh = null) {
   const origin = location.origin;
   box.innerHTML = `
     <h3>Agent keys</h3>
-    <p>On this server, agents need a key to make tier lists. Make one for each agent you use, and give it the key when it asks.</p>
+    <p>On this server, agents need a key to make tier grades. Make one for each agent you use, and give it the key when it asks.</p>
     ${fresh ? `<div class="fresh-key">
       <strong>Copy this key now. It won't be shown again.</strong>
       <div class="copy-row"><input class="input" readonly data-select value="${esc(fresh.key)}"><button class="btn" type="button" data-copy="${esc(fresh.key)}">Copy</button></div>
@@ -158,7 +183,7 @@ function openAgent() {
     <div class="dlg-head"><h2>Use it with your agent</h2><button class="icon-btn" type="button" data-close aria-label="Close">✕</button></div>
     <div class="dlg-body">
       <section class="dlg-section agent-box">
-        <p>Copy this into your agent (Claude, ChatGPT, Codex…). It explains tiergrader, asks you what to grade and who should grade it, then makes the tier list and gives you the links.</p>
+        <p>Copy this into your agent (Claude, ChatGPT, Codex…). It explains tiergrader, asks you what to grade and who should grade it, then makes the tier grade and gives you the links.</p>
         <div class="prompt-box"><pre>${esc(AGENT_PROMPT)}</pre><button class="btn small" type="button" data-copy="${esc(AGENT_PROMPT)}">Copy prompt</button></div>
       </section>
       ${EVERY && user?.subscriber ? `<section class="dlg-section" data-agents></section>` : ""}
@@ -192,6 +217,13 @@ document.addEventListener("click", async (e) => {
 
 renderOwned();
 startDemo(main.querySelector(".demo"));
+
+// "+ New" on a grading page lands here: bring the file drop into view.
+if (location.hash === "#create") {
+  const target = main.querySelector(".hero-form");
+  target?.scrollIntoView({ block: "center" });
+  target?.querySelector(".dropzone, .btn")?.focus({ preventScroll: true });
+}
 
 // Read-only fields (keys, links) select themselves on focus; inline handlers are blocked by the page's CSP.
 document.addEventListener("focusin", (e) => e.target.matches?.("[data-select]") && e.target.select());
@@ -246,7 +278,7 @@ if (form) {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     // The name is optional; the owner can rename it later on the collection page.
-    const title = form.title.value.trim() || `Tier list · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    const title = form.title.value.trim() || `Tier grade · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
     submit.disabled = true;
     submit.textContent = "Creating…";
     try {
@@ -256,8 +288,8 @@ if (form) {
         made = await post("/api/collections", payload, { "content-type": "application/json" });
       } catch (err) {
         if (err.status !== 403 || EVERY) throw err;
-        const key = prompt("This server needs a create key to make collections:");
-        if (!key) throw new Error("A create key is needed on this server.");
+        const key = prompt("Password to make tier grades on this server:");
+        if (!key) throw new Error("Making tier grades here needs the password.");
         made = await post("/api/collections", payload, { "content-type": "application/json", "x-create-key": key });
       }
       let done = 0;
@@ -276,7 +308,7 @@ if (form) {
     } catch (err) {
       alert(err.message);
       submit.disabled = false;
-      submit.textContent = "Create tier list";
+      submit.textContent = "Create tier grade";
     }
   });
 }

@@ -287,6 +287,9 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
 
 /* ---------- landing demo (driven by public/demo.js) ---------- */
 .demo { position: relative; user-select: none; padding-top: 6px; }
+.demo-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; min-height: 26px; }
+.demo-title { font: 400 17px/1.2 var(--serif); letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.demo-new { flex: none; font: 500 12px/1 var(--sans); padding: 6px 10px; background: var(--ink); color: var(--sky); }
 .demo-people { display: flex; gap: 4px; margin-bottom: 10px; }
 .demo-chip { font: 500 12px/1 var(--sans); padding: 6px 10px; border: 1px solid var(--line-2); background: var(--page); transition: background .2s, color .2s, border-color .2s; }
 .demo-chip.on { background: var(--ink); border-color: var(--ink); color: var(--page); }
@@ -302,7 +305,11 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
   background: var(--card); border: 1px solid var(--line-2); font: 600 9.5px/1.15 var(--sans); color: var(--ink); will-change: transform;
 }
 .demo-card.img { background: var(--art); border-color: transparent; color: #fff; display: flex; align-items: flex-end; text-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
-.demo-card.pdf i { position: absolute; right: 4px; bottom: 3px; font: 600 7.5px/1 var(--mono); color: var(--coral); font-style: normal; }
+.demo-card.logo { padding: 0; border-color: var(--line-2); }
+.demo-card.logo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.demo-card.page { background: var(--art); padding: 4px 5px; display: flex; flex-direction: column; justify-content: space-between; }
+.demo-card.page .bars.light + span { color: #fff; }
+.demo-card.page span { font-size: 8.5px; }
 .demo-card.lift { z-index: 6; box-shadow: 0 12px 24px rgba(18, 18, 18, .2); }
 .demo-card.sel { z-index: 5; box-shadow: 0 0 0 1px var(--ink), 0 0 0 4px var(--sky); }
 .demo-cursor { position: absolute; left: 0; top: 0; z-index: 10; pointer-events: none; opacity: 0; }
@@ -339,6 +346,19 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
 .gate p { margin: 0; color: var(--ink-2); max-width: 560px; }
 .gate .fine { font-size: 13.5px; color: var(--muted); }
 .section-title { margin: 40px 0 10px; }
+.example-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.example { display: grid; gap: 6px; align-content: start; padding: 16px; border: 1px solid var(--line-2); background: var(--card); text-decoration: none; color: var(--ink); }
+.example:hover { border-color: var(--ink); }
+.example strong { font: 400 19px/1.2 var(--serif); letter-spacing: -.01em; }
+.example small { color: var(--muted); font-size: 13px; }
+.example .ex-go { margin-top: 4px; font: 500 13px/1 var(--sans); color: var(--blue); }
+.ex-thumbs { display: flex; gap: 4px; margin-bottom: 6px; }
+.ex-thumb { width: 50px; height: 30px; border: 1px solid var(--line-2); background: var(--page); font: 600 8.5px/1.2 var(--sans); font-style: normal; padding: 3px 4px; overflow: hidden; color: var(--ink); }
+.ex-thumb.logo { padding: 0; }
+.ex-thumb.logo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ex-thumb.page .bars, .demo-card.page .bars { display: block; height: 9px; width: 70%; background: linear-gradient(currentColor 0 0) 0 0 / 100% 3px no-repeat, linear-gradient(currentColor 0 0) 0 6px / 60% 3px no-repeat; color: rgba(18, 18, 18, .55); }
+.ex-thumb.page .bars.light, .demo-card.page .bars.light { color: rgba(255, 255, 255, .8); }
+.hero h1 span { display: block; text-wrap: balance; }
 .link-list { display: grid; border: 1px solid var(--line-2); background: var(--card); }
 .link-list a { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); text-decoration: none; }
 .link-list a:last-child { border-bottom: 0; }
@@ -374,4 +394,5 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
   .hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "copy" "demo" "form"; margin-top: 32px; }
   .hero h1 { font-size: 40px; }
   .create-row { flex-direction: column; }
+  .example-grid { grid-template-columns: minmax(0, 1fr); }
 }

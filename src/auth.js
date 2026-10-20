@@ -96,7 +96,7 @@ export function createAuth({ store, every = {}, createKey = "", publicUrl = "" }
       if (mode === "open") return { ok: true, user: null };
       const key = keyFrom(req, url) || String(bodyKey || "");
       if (createKey && key && safeEqual(key, createKey)) return { ok: true, user: null };
-      if (mode === "key") return { ok: false, status: 403, reason: "Creating collections on this server needs the create key (x-create-key header)." };
+      if (mode === "key") return { ok: false, status: 403, reason: "Creating collections on this server needs its password (x-create-key header)." };
       let user = null;
       if (key.startsWith("tg_")) {
         user = store.userByAgentKey(digest(key));

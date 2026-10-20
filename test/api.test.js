@@ -280,3 +280,26 @@ test("owners rank on their own page; it only counts once they've placed somethin
   assert.ok(raterView.raters.some((r) => r.name === "Owner"));
   assert.match(made.owner_url, /\/o\//);
 });
+
+test("examples: each visitor grades on their own guest link and sees Dan and Kate, not other guests", async () => {
+  const visit = (cookie = "") => fetch(`${base}/try/intros`, { redirect: "manual", headers: { cookie } });
+  const first = await visit();
+  assert.equal(first.status, 303);
+  const firstLink = first.headers.get("location");
+  const cookie = first.headers.getSetCookie()[0].split(";")[0];
+  assert.equal((await visit(cookie)).headers.get("location"), firstLink, "the same visitor gets the same link back");
+  const second = (await visit()).headers.get("location");
+  assert.notEqual(second, firstLink);
+
+  const token = firstLink.split("/").pop();
+  await call("POST", `/api/r/${second.split("/").pop()}/place`, { item_id: 1, tier: "F" });
+  const view = (await call("GET", `/api/r/${token}`)).body;
+  assert.equal(view.collection.title, "Which blog intro would you keep reading?");
+  // Dan, Kate and this visitor; the other guest (who has graded) stays hidden.
+  assert.deepEqual(view.raters.map((r) => r.name).sort(), ["Dan", "Kate", "You"]);
+  assert.equal(view.raters.find((r) => r.name === "You").id, view.me.id);
+  assert.equal(view.items.length, 6);
+  assert.equal((await fetch(`${base}/try/nope`)).status, 404);
+  const home = (await call("GET", "/")).body;
+  assert.match(home, /"slug":"logos"/);
+});

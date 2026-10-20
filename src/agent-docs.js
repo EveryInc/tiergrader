@@ -7,7 +7,7 @@ const CREATE_AUTH = {
   every: (base) =>
     `**Creating collections on this server needs an agent key.** An Every subscriber signs in at ${base}, makes an agent key on the home page, and gives it to you. Send it as \`Authorization: Bearer tg_...\` when creating a collection (REST or MCP; MCP clients that can't set headers can use \`${base}/mcp?key=tg_...\`). Nothing else needs it: owner and personal links are their own keys, and ranking never needs an account.`,
   key: () =>
-    "**Creating collections on this server needs its create key**, sent as `x-create-key: ...` (or `/mcp?key=...`). Nothing else needs it: owner and personal links are their own keys.",
+    "**Creating collections on this server needs its password**, sent as `x-create-key: <password>` (or `/mcp?key=...`). Nothing else needs it: owner and personal links are their own keys.",
   open: () => "",
 };
 

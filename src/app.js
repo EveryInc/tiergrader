@@ -72,8 +72,9 @@ export function createApp({
   createKey = process.env.PASSWORD || process.env.CREATE_KEY || "",
   originTrialToken = process.env.WEBMCP_ORIGIN_TRIAL_TOKEN || "",
   every = {
-    clientId: process.env.EVERY_OAUTH_CLIENT_ID || "",
-    clientSecret: process.env.EVERY_OAUTH_CLIENT_SECRET || "",
+    // CLIENT_ID / CLIENT_SECRET are accepted as shorter names.
+    clientId: process.env.EVERY_OAUTH_CLIENT_ID || process.env.CLIENT_ID || "",
+    clientSecret: process.env.EVERY_OAUTH_CLIENT_SECRET || process.env.CLIENT_SECRET || "",
     baseUrl: process.env.EVERY_OAUTH_BASE_URL || "https://every.to",
     scope: process.env.EVERY_OAUTH_SCOPE || "basic_profile",
   },

@@ -56,7 +56,7 @@ Set by environment variables; ranking never needs an account.
 
 | Setup | Who can create |
 |---|---|
-| `EVERY_OAUTH_CLIENT_ID` + `EVERY_OAUTH_CLIENT_SECRET` (+ `PUBLIC_URL`) | Every subscribers, after signing in with Every. Agents use **agent keys** a subscriber makes on the home page (`Authorization: Bearer tg_…`); a key keeps working while its owner has signed in within the last 30 days. |
+| `EVERY_OAUTH_CLIENT_ID` + `EVERY_OAUTH_CLIENT_SECRET` (or `CLIENT_ID` + `CLIENT_SECRET`; `PUBLIC_URL` defaults to Render's URL) | Every subscribers, after signing in with Every. Agents use **agent keys** a subscriber makes on the home page (`Authorization: Bearer tg_…`); a key keeps working while its owner has signed in within the last 30 days. |
 | `PASSWORD` only | Anyone with that one shared password (agents send it as the `x-create-key` header; the home page asks for it). |
 | Neither | Anyone. Fine on your own machine; on Railway or behind https it refuses to start unless you also set `ALLOW_OPEN_CREATE=1`. |
 

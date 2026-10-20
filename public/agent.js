@@ -14,7 +14,7 @@ export function registerAgentTools(ctrl) {
     getResults: () => ctrl.getResults(),
     ...(owner ? { createLinks: (names) => ctrl.createLinks(names), addTextItems: (items) => ctrl.addTextItems(items) } : {}),
     help:
-      "tiergrader page API. getBoard(); readItem(idOrNumber); placeItems([{item, tier, position?}]) with tier S/A/B/C/D/F/unsorted; " +
+      "tiergrader page API. getBoard(); readItem(idOrNumber); placeItems([{item, tier, position?}]) with tier S/A/B/C/D/F/unranked; " +
       "view('me' | 'everyone' | name); getResults()" + (owner ? "; createLinks(['Kieran', 'Dan']); addTextItems([{title, text}])" : ""),
   };
 
@@ -22,7 +22,7 @@ export function registerAgentTools(ctrl) {
     {
       name: "tiergrader_get_board",
       description:
-        "See the tier list on this page: what the collection is, whose ranking is shown, and which items are in each tier (S=4, A=3, B=2, C=1, D=0, F=-1 points) or still unsorted. Call this first.",
+        "See the tier list on this page: what the collection is, whose ranking is shown, and which items are in each tier (S=4, A=3, B=2, C=1, D=0, F=-1 points) or still unranked. Call this first.",
       inputSchema: { type: "object", properties: {} },
       annotations: { readOnlyHint: true },
       execute: async () => json(ctrl.getBoard()),
@@ -54,11 +54,10 @@ export function registerAgentTools(ctrl) {
     },
   ];
 
-  if (!owner) {
-    tools.push({
+  tools.push({
       name: "tiergrader_place_items",
       description:
-        "Move items into tiers on this person's own ranking. The cards move on screen and save immediately; the person can drag them afterwards. Only rank when the person asked you to.",
+        "Move items into tiers on this page's own ranking (the person's, or the owner's on an owner page). The cards move on screen and save immediately; they can drag them afterwards. Only rank when the person asked you to.",
       inputSchema: {
         type: "object",
         properties: {
@@ -69,7 +68,7 @@ export function registerAgentTools(ctrl) {
               type: "object",
               properties: {
                 item: { type: "string", description: "Item id, number, or exact title." },
-                tier: { type: "string", enum: ["S", "A", "B", "C", "D", "F", "unsorted"] },
+                tier: { type: "string", enum: ["S", "A", "B", "C", "D", "F", "unranked"] },
                 position: { type: "integer", description: "Optional 0-based place within the tier (0 = leftmost, the best). Default: the end." },
               },
               required: ["item", "tier"],
@@ -80,7 +79,8 @@ export function registerAgentTools(ctrl) {
       },
       execute: async ({ placements }) => json(ctrl.placeItems(placements)),
     });
-  } else {
+
+  if (owner) {
     tools.push(
       {
         name: "tiergrader_create_links",

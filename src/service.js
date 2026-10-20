@@ -52,10 +52,12 @@ export function createService(store, { broadcast = () => {} } = {}) {
     return out;
   }
 
+  // The owner's own ranking only counts (in averages, results, people lists) once they've placed something.
   function snapshot(c) {
     const items = store.listItems(c.id);
-    const raters = store.listRaters(c.id);
     const placements = store.listPlacements(c.id);
+    const placed = new Set(placements.map((p) => p.rater_id));
+    const raters = store.listRaters(c.id).filter((r) => r.id !== c.owner_rater_id || placed.has(r.id));
     return { items, raters, placements };
   }
 
@@ -63,6 +65,7 @@ export function createService(store, { broadcast = () => {} } = {}) {
     links,
 
     ownerView(c, base) {
+      const me = store.ownerRater(c);
       const { items, raters, placements } = snapshot(c);
       const results = computeResults(items, raters, placements);
       const progress = new Map(results.raters.map((r) => [r.id, r.ranked]));
@@ -71,8 +74,10 @@ export function createService(store, { broadcast = () => {} } = {}) {
         collection: collectionInfo(c),
         links: links(base, c),
         tiers: TIERS,
+        // The owner's own ranking; `raters` is everyone else.
+        me: { id: me.id, name: me.name },
         items: items.map((it) => publicItem(it, base, true)),
-        raters: raters.map((r) => ({
+        raters: raters.filter((r) => r.id !== me.id).map((r) => ({
           id: r.id,
           name: r.name,
           url: `${base}/r/${r.token}`,
@@ -88,7 +93,7 @@ export function createService(store, { broadcast = () => {} } = {}) {
     raterView(rater, base) {
       const c = store.getCollection(rater.collection_id);
       const { items, raters, placements } = snapshot(c);
-      const visible = c.show_others ? raters : raters.filter((r) => r.id === rater.id);
+      const visible = c.show_others ? raters : [rater];
       const ids = new Set(visible.map((r) => r.id));
       const results = computeResults(items, visible, placements.filter((p) => ids.has(p.rater_id)));
       const progress = new Map(results.raters.map((r) => [r.id, r.ranked]));

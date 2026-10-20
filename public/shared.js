@@ -9,7 +9,7 @@ export const TIERS = [
   { id: "F", points: -1, color: "#7fbfff" },
 ];
 
-export const UNSORTED = "unsorted";
+export const UNSORTED = "unsorted"; // shown to people as "Unranked"; the API accepts either word
 
 // The "EVERY / tiergrader" lockup in every page header: the wordmark goes to every.to, the name goes home.
 export const LOCKUP_HTML = `<span class="lockup"><a class="every-logo" href="https://every.to" aria-label="Every"><img src="/static/every-wordmark.svg" alt="Every" width="72" height="20"></a><span class="lockup-sep" aria-hidden="true">/</span><a class="product" href="/">tiergrader</a></span>`;

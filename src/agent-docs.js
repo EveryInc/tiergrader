@@ -20,7 +20,7 @@ Scoring: ${SCALE}
 
 There are no accounts. Every link carries its own token, and whoever has the link has that access:
 
-- **Owner link** \`${base}/o/{owner_token}\`: full control of one collection. Keep it private, like a password.
+- **Owner link** \`${base}/o/{owner_token}\`: full control of one collection, plus the owner's own ranking. Keep it private, like a password.
 - **Personal link** \`${base}/r/{rater_token}\`: one person's ranking. Make one per person and send it to them.
 - **Open link** \`${base}/j/{invite_code}\`: anyone who opens it types their name and gets a personal link.
 
@@ -78,6 +78,7 @@ ${CREATE_AUTH[mode](base)}
 | \`POST {api_url}/raters\` | \`{"names": [...]}\` or \`{"name"}\`: personal links |
 | \`PATCH {api_url}/raters/{id}\` | \`{"name"}\` |
 | \`DELETE {api_url}/raters/{id}\` | Remove a person and their ranking |
+| \`POST {api_url}/place\` | The owner's own ranking: \`{"moves": [{"item_id", "tier", "position"}]}\`, as on a personal link. It only counts in results once it has something in it |
 | \`GET {api_url}/results\` | Averages, ranks and each person's board |
 | \`GET {api_url}/results.csv\` | The same as a spreadsheet |
 

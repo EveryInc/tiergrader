@@ -23,7 +23,7 @@ No dependencies to install: Node 24+ (`node:sqlite`, `node:http`). The page load
 ## How it works
 
 - **Ranking needs no account. Links are the access.** Making a collection gives you three kinds of link:
-  - **Owner link** `/o/…`: add files, make links, see everyone's rankings and the average, export CSV. Keep it private.
+  - **Owner link** `/o/…`: rank it yourself, add files, make links, see everyone's rankings and the average, export CSV. Keep it private.
   - **Personal link** `/r/…`: one person's ranking. Make one per person (Share → names) and DM it to them.
   - **Open link** `/j/…`: anyone types their name and gets their own personal link.
 - **Each file is a card.** Click one to read it in a modal: just the title and the post, image, page or PDF, with the tier buttons underneath. Anything else downloads. Only raster images, PDF, audio and video are served as-is; everything else (HTML, SVG, text…) is served in a sandbox with no access to the app.

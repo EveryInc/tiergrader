@@ -85,8 +85,12 @@ function toast(message, { action, onAction, sticky = false } = {}) {
 
 const me = () => state.data.me;
 const items = () => state.data.items;
-const editable = () => !OWNER && state.viewing === me().id;
-const raterName = (id) => state.data.raters.find((r) => r.id === id)?.name ?? "Someone";
+// Owners and raters both rank their own board; other people's boards and the average are read-only.
+const editable = () => state.viewing === me().id;
+// Everyone whose ranking this page can show: you, plus the others visible here.
+const people = () => (state.data.raters.some((r) => r.id === me().id) ? state.data.raters : [me(), ...state.data.raters]);
+const others = () => people().filter((r) => r.id !== me().id);
+const raterName = (id) => people().find((r) => r.id === id)?.name ?? "Someone";
 
 function boardOf(raterId) {
   const lists = Object.fromEntries([...TIER_IDS.map((t) => [t, []]), [UNSORTED, []]]);
@@ -102,7 +106,7 @@ function boardOf(raterId) {
 }
 
 function results() {
-  return computeResults(items(), state.data.raters, state.data.placements);
+  return computeResults(items(), people(), state.data.placements);
 }
 
 // The board on screen: one person's, or everyone's average (each card in the tier nearest its average).
@@ -194,7 +198,7 @@ function place(moves, { animate = true, record = true, advanceFrom = null } = {}
   // The reader covers the board, so say where the card went.
   if (state.preview && moves.length === 1) {
     const it = byId.get(moves[0].item_id);
-    const where = moves[0].tier === UNSORTED ? "Unsorted" : `${moves[0].tier} tier`;
+    const where = moves[0].tier === UNSORTED ? "Unranked" : `${moves[0].tier} tier`;
     toast(advanceFrom && !next ? `#${it.n} → ${where}. That's everything ranked.` : `#${it.n} ${it.title} → ${where}`);
   }
   save(moves);
@@ -221,9 +225,9 @@ function nextUnsorted(fromId) {
 function applyData(data) {
   state.data = data;
   byId = new Map(data.items.map((it) => [it.id, it]));
-  const valid = (v) => v === "everyone" || data.raters.some((r) => r.id === v);
-  if (!state.viewing || !valid(state.viewing)) state.viewing = OWNER ? "everyone" : data.me.id;
-  if (!OWNER && state.viewing === "everyone" && !data.raters.some((r) => r.id !== data.me.id)) state.viewing = data.me.id;
+  const valid = (v) => v === "everyone" || v === data.me.id || data.raters.some((r) => r.id === v);
+  if (!state.viewing || !valid(state.viewing)) state.viewing = data.me.id;
+  if (state.viewing === "everyone" && !others().length) state.viewing = data.me.id;
   if (state.selected && !byId.has(state.selected)) {
     state.selected = null;
     state.preview = false;
@@ -294,8 +298,12 @@ function gone() {
 
 const app = document.getElementById("app");
 app.innerHTML = `
-  <header class="topbar"></header>
-  <nav class="peoplebar" aria-label="Whose ranking to show"></nav>
+  <header class="topbar">
+    ${LOCKUP_HTML}
+    <div class="title-wrap"></div>
+    <nav class="people" aria-label="Whose ranking to show"></nav>
+    <div class="topbar-actions"></div>
+  </header>
   <main class="workspace">
     <div class="board-scroll"></div>
   </main>
@@ -307,90 +315,59 @@ app.innerHTML = `
       <div class="preview-bar"></div>
     </section>
   </div>`;
-const topbar = app.querySelector(".topbar");
-const peoplebar = app.querySelector(".peoplebar");
+const titleWrap = app.querySelector(".title-wrap");
+const peopleNav = app.querySelector(".people");
+const actions = app.querySelector(".topbar-actions");
 const boardScroll = app.querySelector(".board-scroll");
 const reader = app.querySelector(".reader");
 const preview = app.querySelector(".preview");
 const [pHead, pBody, pBar] = preview.children;
 const TRASH_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>`;
+const pointsLabel = (p) => (p > 0 ? `+${p}` : p < 0 ? `−${-p}` : "0");
 
 function render() {
-  renderTopbar();
+  renderTitle();
   renderPeople();
+  renderActions();
   renderBoard();
   renderPreview();
 }
 
-function renderTopbar() {
-  if (topbar.contains(document.activeElement) && document.activeElement.isContentEditable) return;
+function renderTitle() {
   const c = state.data.collection;
   document.title = `${c.title} · tiergrader`;
-  const total = items().length;
-  let progress = "";
-  if (!OWNER) {
-    const done = rankedCount(me().id);
-    progress = `<div class="progress" title="${done} of ${total} ranked"><span>${done} of ${total} ranked</span><span class="progress-bar"><i style="transform:scaleX(${total ? done / total : 0})"></i></span></div>`;
-  }
-  topbar.innerHTML = `
-    ${LOCKUP_HTML}
-    <div class="title-wrap">
-      <h1 ${OWNER ? `contenteditable="plaintext-only" spellcheck="false" data-edit="title" title="Rename"` : ""}>${esc(c.title)}</h1>
-      ${OWNER ? `<p contenteditable="plaintext-only" data-edit="description" data-placeholder="Add a note for raters: what should they judge on?">${esc(c.description)}</p>` : c.description ? `<p title="${esc(c.description)}">${esc(c.description)}</p>` : ""}
-    </div>
-    <div class="topbar-actions">
-      ${progress}
-      ${OWNER ? `<button class="btn hide-sm" data-act="add-files">Add files</button><button class="btn primary" data-act="share">Share</button>` : ""}
-      <button class="btn ghost hide-sm" data-act="agent" title="Using an AI agent">Agent</button>
-      <button class="btn ghost" data-act="help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
-    </div>`;
+  if (titleWrap.contains(document.activeElement) && document.activeElement.isContentEditable) return;
+  // The note for raters only shows when there is one; owners edit it under Share.
+  titleWrap.innerHTML = `
+    <h1 ${OWNER ? `contenteditable="plaintext-only" spellcheck="false" data-edit="title" title="Rename"` : ""}>${esc(c.title)}</h1>
+    ${c.description ? `<p title="${esc(c.description)}">${esc(c.description)}</p>` : ""}`;
+}
+
+function renderActions() {
+  actions.innerHTML = `
+    ${OWNER ? `<button class="btn hide-sm" data-act="add-files">Add files</button><button class="btn primary" data-act="share">Share</button>` : ""}
+    <button class="btn ghost hide-sm" data-act="agent" title="Using an AI agent">Agent</button>
+    <button class="btn ghost hide-sm" data-act="help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>`;
 }
 
 function chip(view, name, meta, dot = "") {
   return `<button class="chip" data-view="${esc(view)}" aria-pressed="${state.viewing === view}">${dot ? `<span class="dot ${dot}"></span>` : ""}${esc(name)}${meta ? ` <small>${esc(meta)}</small>` : ""}</button>`;
 }
 
+// Whose ranking is on screen: you, each other person, or everyone's average. Lives in the top nav.
 function renderPeople() {
   const total = items().length;
   const dot = (n) => (n === 0 ? "none" : n < total ? "partial" : "done");
-  const parts = [];
-  const others = OWNER ? state.data.raters : state.data.raters.filter((r) => r.id !== me().id);
-  if (OWNER) {
-    parts.push(`<span class="label">Viewing</span>`, chip("everyone", "Everyone", "average"));
-    if (others.length) parts.push(`<span class="sep"></span>`);
-    else parts.push(`<span class="label">No one has been invited yet.</span>`);
-  } else {
-    parts.push(`<span class="label">Viewing</span>`, chip(me().id, "You", `${rankedCount(me().id)}/${total}`, dot(rankedCount(me().id))));
-    if (others.length) parts.push(`<span class="sep"></span>`);
-  }
-  for (const r of others) {
+  const mine = rankedCount(me().id);
+  const parts = [chip(me().id, "You", `${mine}/${total}`, dot(mine))];
+  for (const r of others()) {
     const n = rankedCount(r.id);
     parts.push(chip(r.id, r.name, `${n}/${total}`, dot(n)));
   }
-  if (!OWNER && others.length) parts.push(`<span class="sep"></span>`, chip("everyone", "Everyone", "average"));
-  parts.push(`<span class="spacer"></span>`);
-  if (state.viewing === "everyone" && total) {
-    parts.push(`<button class="chip" data-act="table" aria-pressed="${state.table}">Table</button>`);
-  }
-  if (OWNER && state.data.raters.length) parts.push(`<a class="chip" href="${API}/results.csv" download>Export CSV</a>`);
-  peoplebar.hidden = !OWNER && !others.length;
-  peoplebar.innerHTML = parts.join("");
-}
-
-function noticeHtml() {
-  if (OWNER && !state.data.raters.length) {
-    return `<div class="notice"><span><strong>No rankings yet.</strong> Make a personal link for each person, or share one open link anyone can join.</span><button class="btn primary small" data-act="share">Share</button></div>`;
-  }
-  if (state.viewing === "everyone") {
-    const n = state.data.raters.filter((r) => rankedCount(r.id) > 0).length;
-    return `<div class="notice"><span><strong>Everyone's average</strong> across ${plural(n, "person", "people")}. Each card sits in the tier nearest its average score.</span></div>`;
-  }
-  if (!editable()) {
-    const r = state.data.raters.find((x) => x.id === state.viewing);
-    const back = OWNER ? `<button class="btn small" data-copy="${esc(r.url)}">Copy ${esc(r.name)}'s link</button>` : `<button class="btn small" data-view="${me().id}">Back to yours</button>`;
-    return `<div class="notice"><span>Viewing <strong>${esc(r.name)}</strong>'s ranking (${rankedCount(r.id)} of ${items().length} ranked). Read-only.</span>${back}</div>`;
-  }
-  return "";
+  if (others().length) parts.push(chip("everyone", "Everyone", "avg"));
+  if (state.viewing === "everyone" && total) parts.push(`<button class="chip" data-act="table" aria-pressed="${state.table}">Table</button>`);
+  if (OWNER && others().length) parts.push(`<a class="chip" href="${API}/results.csv" download>CSV</a>`);
+  peopleNav.innerHTML = parts.join("");
 }
 
 function cardHtml(id, extra) {
@@ -404,8 +381,8 @@ function cardHtml(id, extra) {
     const tiers = Object.values(extra.ratings).sort((a, b) => POINTS[b] - POINTS[a]);
     if (tiers.length) {
       classes.push("with-votes");
-      const shown = tiers.slice(0, 7).map((t) => `<i style="background:${COLOR[t]}">${t}</i>`).join("");
-      votes = `<span class="votes">${shown}${tiers.length > 7 ? `+${tiers.length - 7}` : ""}</span>`;
+      const shown = tiers.slice(0, 6).map((t) => `<i style="background:${COLOR[t]}">${t}</i>`).join("");
+      votes = `<span class="votes">${shown}${tiers.length > 6 ? `+${tiers.length - 6}` : ""}</span>`;
       avg = `<span class="avg" title="Average score">${fmtAvg(extra.avg)}</span>`;
     }
   }
@@ -424,16 +401,15 @@ function renderBoard() {
     return;
   }
   if (state.viewing === "everyone" && state.table) {
-    boardScroll.innerHTML = noticeHtml() + tableHtml();
+    boardScroll.innerHTML = tableHtml();
     return;
   }
   const { lists, extra } = currentView();
   const edit = editable();
-  let html = noticeHtml();
-  html += `<div class="board${edit ? "" : " readonly"}">`;
+  let html = `<div class="board${edit ? "" : " readonly"}">`;
   for (const t of TIERS) {
     html += `<div class="tier-row" data-tier="${t.id}" style="--tier:${t.color}">
-      <div class="tier-label"><span class="letter">${t.id}</span><span class="pts">${t.points} pt${Math.abs(t.points) === 1 ? "" : "s"}</span></div>
+      <div class="tier-label" title="${t.id} tier: ${pointsLabel(t.points)} points"><span class="pts">${pointsLabel(t.points)}</span><span class="letter">${t.id}</span></div>
       <div class="tier-drop" data-tier="${t.id}">${lists[t.id].map((id) => cardHtml(id, extra?.get(id))).join("")}</div>
     </div>`;
   }
@@ -441,9 +417,11 @@ function renderBoard() {
   const left = lists[UNSORTED].length;
   const hint = edit
     ? `Click a card to read it, then press <kbd>S</kbd> <kbd>A</kbd> <kbd>B</kbd> <kbd>C</kbd> <kbd>D</kbd> <kbd>F</kbd> or drag it`
-    : state.viewing === "everyone" ? "" : "Read-only";
+    : state.viewing === "everyone"
+      ? "Each card sits in the tier nearest its average"
+      : `${esc(raterName(state.viewing))}'s ranking · read-only`;
   html += `<section class="pool${left ? "" : " empty"}">
-    <div class="pool-head"><h2>${state.viewing === "everyone" ? "Not ranked yet" : "Unsorted"}</h2><span class="count">${left}</span><span class="hint">${hint}</span></div>
+    <div class="pool-head"><h2>Unranked</h2><span class="count">${left}</span><span class="hint">${hint}</span></div>
     <div class="tier-drop" data-tier="${UNSORTED}">${lists[UNSORTED].map((id) => cardHtml(id, extra?.get(id))).join("")}</div>
     ${edit && !left ? `<div class="pool-done">All ${items().length} ranked. Drag cards any time to change your mind.</div>` : ""}
   </section>`;
@@ -453,7 +431,7 @@ function renderBoard() {
 
 function tableHtml() {
   const res = results();
-  const raters = state.data.raters;
+  const raters = people();
   const pill = (t) => (t && t !== UNSORTED ? `<span class="tier-pill" style="--tier:${COLOR[t]}">${t}</span>` : `<span class="tier-pill none">–</span>`);
   const rows = res.items
     .map((row) => `<tr>
@@ -586,7 +564,7 @@ function ratingsLine(it) {
   const pill = (t) => `<span class="tier-pill" style="--tier:${COLOR[t]}">${t}</span>`;
   if (state.viewing !== "everyone") {
     const t = locate(state.viewing, it.id).tier;
-    const who = OWNER || state.viewing !== me().id ? raterName(state.viewing) : "You";
+    const who = state.viewing === me().id ? "You" : raterName(state.viewing);
     return t === UNSORTED ? `${esc(who)} hasn't placed this yet.` : `${esc(who)} put this in ${pill(t)}`;
   }
   const row = results().items.find((r) => r.id === it.id);
@@ -671,7 +649,7 @@ async function saveEdit(el) {
   try {
     if (el.dataset.edit) {
       const field = el.dataset.edit;
-      if (field === "title" && !value) return renderTopbar();
+      if (field === "title" && !value) return renderTitle();
       if (value === (state.data.collection[field] || "")) return;
       await api("", { method: "PATCH", json: { [field]: value } });
     } else if (el.dataset.editItem) {
@@ -787,6 +765,11 @@ function openShare() {
       ${copyRow(links.join_url)}
     </section>
     <section class="dlg-section">
+      <h3>Note for raters</h3>
+      <p>Optional. Shown under the title on everyone's page, e.g. what to judge on.</p>
+      <textarea class="input" rows="2" data-note placeholder="e.g. Would you keep reading after the first paragraph?" style="font-family:var(--sans);color:var(--ink)">${esc(collection.description)}</textarea>
+    </section>
+    <section class="dlg-section">
       <label class="toggle"><input type="checkbox" data-toggle="show_others" ${collection.show_others ? "checked" : ""}> People can see each other's rankings</label>
     </section>
     <section class="dlg-section">
@@ -823,6 +806,11 @@ function openShare() {
         if (e.target.closest('[data-act="copy-all"]')) {
           copy(state.data.raters.map((r) => `${r.name}: ${r.url}`).join("\n"), "All links copied");
         }
+      });
+      d.querySelector("[data-note]").addEventListener("change", async (e) => {
+        await api("", { method: "PATCH", json: { description: e.target.value.trim() } }).catch((err) => toast(err.message));
+        refresh();
+        toast(e.target.value.trim() ? "Note saved" : "Note removed");
       });
       d.querySelector('[data-toggle="show_others"]').addEventListener("change", async (e) => {
         await api("", { method: "PATCH", json: { show_others: e.target.checked } }).catch((err) => toast(err.message));
@@ -874,14 +862,14 @@ function openHelp() {
     `<dl class="shortcuts">
       <dt><kbd>S</kbd> <kbd>A</kbd> <kbd>B</kbd> <kbd>C</kbd> <kbd>D</kbd> <kbd>F</kbd></dt><dd>Put the selected card in that tier (holding <kbd>⌥</kbd> works too)</dd>
       <dt><kbd>4</kbd> <kbd>3</kbd> <kbd>2</kbd> <kbd>1</kbd> <kbd>0</kbd> <kbd>−</kbd></dt><dd>Same, by points: S 4 · A 3 · B 2 · C 1 · D 0 · F −1</dd>
-      <dt><kbd>U</kbd> or <kbd>⌫</kbd></dt><dd>Back to unsorted</dd>
+      <dt><kbd>U</kbd> or <kbd>⌫</kbd></dt><dd>Back to unranked</dd>
       <dt><kbd>←</kbd> <kbd>→</kbd> or <kbd>J</kbd> <kbd>K</kbd></dt><dd>Previous / next card</dd>
       <dt><kbd>Enter</kbd></dt><dd>Open or close the reader</dd>
       <dt><kbd>Space</kbd></dt><dd>Scroll the reader</dd>
       <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>Undo</dd>
       <dt><kbd>Esc</kbd></dt><dd>Close the reader</dd>
     </dl>
-    <p style="margin:0;color:var(--muted);font-size:12.5px">After you place a card, the next unsorted one is selected, so you can read, press a key, read, press a key.</p>`,
+    <p style="margin:0;color:var(--muted);font-size:12.5px">After you place a card, the next unranked one opens, so you can read, press a key, read, press a key.</p>`,
   );
 }
 
@@ -990,7 +978,6 @@ document.addEventListener("keydown", (e) => {
   if (!tier) return;
   e.preventDefault();
   if (!editable()) {
-    if (OWNER) return toast("This is the owner view. To rank too, make yourself a personal link under Share.");
     return toast(`You're viewing ${state.viewing === "everyone" ? "everyone's average" : `${raterName(state.viewing)}'s ranking`}.`, {
       action: "Back to yours",
       onAction: () => setViewing(me().id),
@@ -1002,7 +989,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 function firstSelection() {
-  const first = (!OWNER && nextUnsorted(null)) || items()[0]?.id;
+  const first = nextUnsorted(null) || items()[0]?.id;
   if (first) select(first, { open: true });
 }
 
@@ -1056,7 +1043,7 @@ function resolveItem(ref) {
 function resolveView(person) {
   const p = String(person ?? "").trim().toLowerCase();
   if (["everyone", "average", "all", "consensus"].includes(p)) return "everyone";
-  if (!OWNER && ["me", "you", "mine", "my", "self", me().name.toLowerCase()].includes(p)) return me().id;
+  if (["me", "you", "mine", "my", "self", me().name.toLowerCase()].includes(p)) return me().id;
   const r = state.data.raters.find((x) => x.id === person || x.name.toLowerCase() === p) || state.data.raters.find((x) => x.name.toLowerCase().startsWith(p));
   return r?.id ?? null;
 }
@@ -1070,15 +1057,15 @@ const controller = {
   role: boot.role,
   getBoard() {
     const { lists, extra } = currentView();
-    const viewing = state.viewing === "everyone" ? "everyone (average)" : OWNER || state.viewing !== me().id ? raterName(state.viewing) : `you (${me().name})`;
+    const viewing = state.viewing === "everyone" ? "everyone (average)" : state.viewing === me().id ? `you (${me().name})` : raterName(state.viewing);
     return {
       collection: { title: state.data.collection.title, description: state.data.collection.description },
-      page: OWNER ? "owner page (sees everyone's rankings; boards are read-only here)" : `${me().name}'s personal ranking page`,
+      page: OWNER ? "owner page (your own ranking, plus everyone else's, read-only)" : `${me().name}'s personal ranking page`,
       viewing,
       editable: editable(),
       scoring: POINTS,
       tiers: Object.fromEntries(TIER_IDS.map((t) => [t, lists[t].map((id) => (extra ? { ...brief(id), average: extra.get(id).avg } : brief(id)))])),
-      unsorted: lists[UNSORTED].map(brief),
+      unranked: lists[UNSORTED].map(brief),
       people: state.data.raters.map((r) => ({ name: r.name, ranked: rankedCount(r.id), total: items().length })),
     };
   },
@@ -1099,14 +1086,13 @@ const controller = {
     };
   },
   placeItems(placements) {
-    if (OWNER) throw new Error("This is the owner page; boards are read-only here. Rankings are made on personal links.");
     if (!Array.isArray(placements) || !placements.length) throw new Error("Give placements: [{ item, tier }].");
     if (state.viewing !== me().id) setViewing(me().id);
     const moves = placements.map((p) => {
       const it = resolveItem(p.item ?? p.item_id ?? p.id);
       if (!it) throw new Error(`No item "${p.item ?? p.item_id}".`);
       const tier = normalizeTier(p.tier);
-      if (!tier) throw new Error(`Unknown tier "${p.tier}". Use S, A, B, C, D, F or unsorted.`);
+      if (!tier) throw new Error(`Unknown tier "${p.tier}". Use S, A, B, C, D, F or unranked.`);
       return { item_id: it.id, tier, position: Number.isInteger(p.position) ? p.position : undefined };
     });
     place(moves);
@@ -1115,7 +1101,7 @@ const controller = {
   view(person) {
     const v = resolveView(person);
     if (!v) throw new Error(`No one called "${person}" here. People: ${state.data.raters.map((r) => r.name).join(", ") || "none yet"}.`);
-    if (!OWNER && v === "everyone" && !state.data.raters.some((r) => r.id !== me().id)) throw new Error("Other people's rankings aren't visible on this page.");
+    if (v === "everyone" && !others().length) throw new Error("No one else's ranking is visible on this page yet.");
     setViewing(v);
     return controller.getBoard();
   },

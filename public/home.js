@@ -1,5 +1,6 @@
 // Home: sign in (when the server uses Every sign-in), create a collection, your collections, agent keys.
-import { TIERS, LOCKUP_HTML } from "./shared.js";
+import { LOCKUP_HTML } from "./shared.js";
+import { startDemo } from "./demo.js";
 
 const REPO = "https://github.com/EveryInc/tiergrader";
 const boot = JSON.parse(document.getElementById("boot")?.textContent || "{}");
@@ -24,6 +25,7 @@ const ago = (t) => {
 };
 
 const rated = read("tg.rated");
+const AGENT_PROMPT = `Read ${location.origin}/llms.txt, then make a tiergrader collection from the posts in ./drafts and DM Kieran and Dan their ranking links on Slack.`;
 const staged = [];
 const main = document.getElementById("home");
 const SIGNIN_ERRORS = {
@@ -40,18 +42,16 @@ const account = !EVERY
     : `<a class="btn small" href="/auth/every?return_to=/">Sign in with Every</a>`;
 
 const createForm = `
-  <form class="panel create-form" novalidate>
-    <label>What are people ranking?
-      <input class="input" name="title" placeholder="Which AI-written intro is best?" autocomplete="off" required>
-    </label>
-    <label>What should they judge on? (optional)
-      <textarea class="input" name="description" rows="2" placeholder="e.g. Would you keep reading after the first paragraph?"></textarea>
-    </label>
-    <div class="dropzone" tabindex="0" role="button" aria-label="Add files">
-      Drop files here or <u>choose files</u>. Each file becomes a card. You can add more later.
+  <form class="create-form" novalidate>
+    <div class="dropzone" tabindex="0" role="button" aria-label="Choose files">
+      <strong>Drop files to make a tier list</strong>
+      <span>or <u>choose files</u>: posts, images, PDFs, HTML pages, anything</span>
       <div class="staged"></div>
     </div>
-    <button class="btn primary" type="submit" style="height:42px;justify-content:center">Create collection</button>
+    <div class="create-row">
+      <input class="input" name="title" placeholder="Name it (optional)" autocomplete="off" aria-label="Name (optional)">
+      <button class="btn primary" type="submit">Create tier list</button>
+    </div>
   </form>`;
 
 const gate = !user
@@ -75,22 +75,25 @@ main.innerHTML = `
   </header>
   ${signinError ? `<div class="notice error">${esc(signinError)}</div>` : ""}
   <section class="hero">
-    <h1>Drop in files.<br>Get everyone's tier list.</h1>
-    <p>Upload blog posts, designs, screenshots, anything. Share a link. Each person drags every card into S, A, B, C, D or F, and you see how each of them ranked it, and the average.</p>
-    <div class="demo-tiers" aria-hidden="true">
-      ${TIERS.map((t, i) => `<div style="--tier:${t.color}"><b>${t.id}</b><span>${"<i></i>".repeat([3, 2, 4, 1, 2, 1][i])}</span></div>`).join("")}
+    <div class="hero-copy">
+      <h1>Drop in files.<br>Get everyone's tier list.</h1>
+      <p>Upload blog posts, designs, screenshots, anything. Share a link. Each person drags every card into S, A, B, C, D or F, and you see how each of them ranked it, and the average.</p>
     </div>
+    <div class="demo" aria-hidden="true"></div>
+    <div class="hero-form">${canCreate ? createForm : gate}</div>
   </section>
-
-  ${canCreate ? createForm : gate}
 
   <div data-owned></div>
   ${rated.length ? `<div class="section-title">Rankings you're part of</div><div class="link-list">${rated.map((x) => `<a href="${esc(x.url)}"><span>${esc(x.title)}</span><small>as ${esc(x.name)} · ${ago(x.at)}</small></a>`).join("")}</div>` : ""}
 
   <div class="section-title">Using an agent?</div>
-  <div class="panel agent-card" data-agents>
-    Agents can do all of this for you: make a collection, upload the files, make a personal link for each person and DM it to them, then pull everyone's rankings. Point yours at <a href="/llms.txt">llms.txt</a>:
-    <pre>Read ${esc(location.origin)}/llms.txt, then make a tiergrader collection from the posts in ./drafts and DM Kieran and Dan their ranking links on Slack.</pre>
+  <div class="panel agent-card">
+    <p>Agents can do all of this for you: make a collection, upload the files, make a personal link for each person and DM it to them, then pull everyone's rankings. Give yours this:</p>
+    <div class="prompt-box">
+      <pre>${esc(AGENT_PROMPT)}</pre>
+      <button class="btn primary small" type="button" data-copy="${esc(AGENT_PROMPT)}" data-copied="Copied">Copy prompt</button>
+    </div>
+    <div data-agents></div>
   </div>
   <footer class="home-foot">tiergrader is <a href="${REPO}">open source</a> (MIT)${EVERY ? ` · An <a href="https://every.to">Every</a> experiment` : ""}</footer>`;
 
@@ -118,7 +121,7 @@ function renderKeys(keys, fresh = null) {
   const box = main.querySelector("[data-agents]");
   const origin = location.origin;
   box.innerHTML = `
-    <p style="margin:0 0 10px">Agents can make collections, upload files, make a link per person and pull results. Give yours an agent key, and point it at <a href="/llms.txt">llms.txt</a>.</p>
+    <p style="margin:18px 0 10px">On this server, agents need an agent key to make collections. Make one for each agent you use.</p>
     ${fresh ? `<div class="fresh-key">
       <strong>Copy this key now. It won't be shown again.</strong>
       <div class="copy-row"><input class="input" readonly data-select value="${esc(fresh.key)}"><button class="btn" type="button" data-copy="${esc(fresh.key)}">Copy</button></div>
@@ -152,7 +155,9 @@ main.addEventListener("click", async (e) => {
   const copyBtn = e.target.closest("[data-copy]");
   if (copyBtn) {
     await navigator.clipboard.writeText(copyBtn.dataset.copy).catch(() => {});
+    const label = copyBtn.textContent;
     copyBtn.textContent = "Copied";
+    setTimeout(() => (copyBtn.textContent = label), 1500);
   }
   const del = e.target.closest("[data-delete-key]");
   if (del && confirm("Delete this key? Agents using it stop working.")) {
@@ -163,6 +168,7 @@ main.addEventListener("click", async (e) => {
 });
 
 renderOwned();
+startDemo(main.querySelector(".demo"));
 
 // Read-only fields (keys, links) select themselves on focus; inline handlers are blocked by the page's CSP.
 document.addEventListener("focusin", (e) => e.target.matches?.("[data-select]") && e.target.select());
@@ -216,12 +222,12 @@ if (form) {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const title = form.title.value.trim();
-    if (!title) return form.title.focus();
+    // The name is optional; the owner can rename it later on the collection page.
+    const title = form.title.value.trim() || `Tier list · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
     submit.disabled = true;
     submit.textContent = "Creating…";
     try {
-      const payload = JSON.stringify({ title, description: form.description.value.trim() });
+      const payload = JSON.stringify({ title });
       let made;
       try {
         made = await post("/api/collections", payload, { "content-type": "application/json" });
@@ -247,7 +253,7 @@ if (form) {
     } catch (err) {
       alert(err.message);
       submit.disabled = false;
-      submit.textContent = "Create collection";
+      submit.textContent = "Create tier list";
     }
   });
 }

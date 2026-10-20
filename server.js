@@ -14,9 +14,13 @@ server.listen(PORT, () => {
   console.log(`tiergrader on http://localhost:${PORT} (who can create collections: ${server.authMode})`);
 });
 
+// Close live-update streams and idle keep-alive sockets so restarts and redeploys don't hang;
+// give in-flight requests a few seconds at most.
 const shutdown = () => {
   server.closeStreams();
   server.close(() => process.exit(0));
+  server.closeIdleConnections();
+  setTimeout(() => process.exit(0), 3000).unref();
 };
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);

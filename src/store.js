@@ -162,10 +162,12 @@ export function openStore(dataDir) {
       last_used_at TEXT
     );
   `);
-  // Added after the first release: which signed-in creator made a collection.
-  if (!db.prepare("PRAGMA table_info(collections)").all().some((c) => c.name === "owner_user_id")) {
+  // Added after the first release: which signed-in creator made a collection, and the owner's own ranking.
+  const collectionColumns = db.prepare("PRAGMA table_info(collections)").all().map((c) => c.name);
+  if (!collectionColumns.includes("owner_user_id")) {
     db.exec("ALTER TABLE collections ADD COLUMN owner_user_id TEXT; CREATE INDEX IF NOT EXISTS collections_by_owner ON collections(owner_user_id, created_at);");
   }
+  if (!collectionColumns.includes("owner_rater_id")) db.exec("ALTER TABLE collections ADD COLUMN owner_rater_id TEXT;");
 
   const now = () => new Date().toISOString();
   const q = (sql) => db.prepare(sql);
@@ -338,6 +340,16 @@ export function openStore(dataDir) {
         .run(r.id, collectionId, name, r.token, r.created_at, r.created_at);
       touch(collectionId);
       return q("SELECT * FROM raters WHERE id = ?").get(r.id);
+    },
+    // The owner ranks on the owner page as a rater of their own, made the first time it's needed.
+    ownerRater(c) {
+      const existing = c.owner_rater_id && q("SELECT * FROM raters WHERE id = ?").get(c.owner_rater_id);
+      if (existing) return existing;
+      const owner = c.owner_user_id && q("SELECT name FROM users WHERE id = ?").get(c.owner_user_id);
+      const r = store.addRater(c.id, owner?.name || "Owner");
+      q("UPDATE collections SET owner_rater_id = ? WHERE id = ?").run(r.id, c.id);
+      c.owner_rater_id = r.id;
+      return r;
     },
     listRaters(collectionId) {
       return q("SELECT * FROM raters WHERE collection_id = ? ORDER BY created_at").all(collectionId);

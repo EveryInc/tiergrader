@@ -256,3 +256,26 @@ test("create key, when set, is required to make collections", async () => {
   assert.equal((await post({ "x-create-key": "letmein" })).status, 201);
   locked.close();
 });
+
+test("owners rank on their own page; it only counts once they've placed something", async () => {
+  const { made, api, kieran } = await setup();
+  let view = (await call("GET", api)).body;
+  assert.ok(view.me?.id, "the owner page has its own ranking");
+  assert.ok(!view.raters.some((r) => r.id === view.me.id), "raters lists everyone else");
+  await call("POST", `/api/r/${kieran}/place`, { item_id: 1, tier: "S" });
+  // Before the owner ranks anything, they're left out of results and the CSV.
+  let csv = (await call("GET", `${api}/results.csv`)).body;
+  assert.doesNotMatch(csv.split("\n")[0], /Owner/);
+  const placed = await call("POST", `${api}/place`, { moves: [{ item_id: 1, tier: "D" }] });
+  assert.equal(placed.status, 200);
+  view = placed.body;
+  assert.ok(view.placements.some((p) => p.rater_id === view.me.id && p.tier === "D"));
+  const hook = (await call("GET", `${api}/results`)).body.items.find((i) => i.n === 1);
+  assert.equal(hook.average, 2); // Kieran S (4) and the owner D (0)
+  csv = (await call("GET", `${api}/results.csv`)).body;
+  assert.match(csv.split("\n")[0], /,Owner$/);
+  // Raters see the owner like anyone else once they've ranked.
+  const raterView = (await call("GET", `/api/r/${kieran}`)).body;
+  assert.ok(raterView.raters.some((r) => r.name === "Owner"));
+  assert.match(made.owner_url, /\/o\//);
+});

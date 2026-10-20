@@ -421,6 +421,12 @@ export function createApp({
           return json(res, 200, { deleted: c.id });
         }
       }
+      if (sub === "/place" && method === "POST") {
+        // The owner's own ranking.
+        const body = await readJson(req);
+        service.place(store.ownerRater(c), Array.isArray(body) ? body : body.moves ?? [body], source);
+        return json(res, 200, service.ownerView(store.getCollection(c.id), base));
+      }
       if (sub === "/items" && method === "POST") {
         const inputs = await readItemInputs(req, url);
         return json(res, 201, { added: service.addItems(c, inputs, base, source) });

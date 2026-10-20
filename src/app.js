@@ -64,7 +64,8 @@ const CORS = {
 
 export function createApp({
   dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || "./data",
-  publicUrl = process.env.PUBLIC_URL || "",
+  // Render sets RENDER_EXTERNAL_URL for every web service.
+  publicUrl = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || "",
   createKey = process.env.CREATE_KEY || "",
   originTrialToken = process.env.WEBMCP_ORIGIN_TRIAL_TOKEN || "",
   every = {
@@ -74,7 +75,7 @@ export function createApp({
     scope: process.env.EVERY_OAUTH_SCOPE || "basic_profile",
   },
   allowOpen = process.env.ALLOW_OPEN_CREATE === "1",
-  hosted = !!process.env.RAILWAY_ENVIRONMENT,
+  hosted = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RENDER),
 } = {}) {
   checkConfig({ every, createKey, publicUrl, allowOpen, hosted });
   const store = openStore(dataDir);

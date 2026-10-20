@@ -71,12 +71,17 @@ Getting an Every OAuth client: ask the Every team to provision one with the redi
 - **MCP server:** `POST /mcp` (streamable HTTP, stateless; tools take the owner or personal link as an argument, and `create_collection` takes your agent key as a bearer header or `/mcp?key=…`): `create_collection`, `add_items`, `get_collection`, `create_rater_links`, `get_results`, `update_collection`, `remove_item`, `get_board`, `read_item`, `place_items`.
 - **WebMCP:** board pages register tools on `document.modelContext` (falling back to `navigator.modelContext`): `tiergrader_get_board`, `tiergrader_read_item`, `tiergrader_place_items`, `tiergrader_view`, `tiergrader_get_results`, plus `tiergrader_create_links` and `tiergrader_add_text_items` on owner pages. An agent with the page open can sort cards for you and you watch them move. The same functions are on `window.tiergrader` for agents that can run JavaScript but don't speak WebMCP.
 
-## Deploy (Railway)
+## Deploy
 
-`railway.json` is included (health check `/healthz`).
+The SQLite file holds everything, uploads included, so the server needs a persistent disk.
 
-- **Add a volume.** The SQLite file holds everything, uploads included. Without a volume every redeploy wipes it. The app uses `DATA_DIR`, else Railway's `RAILWAY_VOLUME_MOUNT_PATH`, else `./data`.
-- **Set `PUBLIC_URL`** to the public address so the links the API hands out are right.
+- **Render:** `render.yaml` is a Blueprint for a web service with a 1 GB disk at `/data` (a paid instance type, since free ones have no disk). It generates a `CREATE_KEY`, and uses Render's own URL unless you set `PUBLIC_URL`.
+- **Railway:** `railway.json` is included. Add a volume; the app finds it through `RAILWAY_VOLUME_MOUNT_PATH`.
+- **Anywhere else:** Node 24+, `npm start`, `DATA_DIR` on a persistent disk, health check `/healthz`.
+
+Then:
+
+- **Set `PUBLIC_URL`** to the public address so the links the API hands out are right (Render sets this for you).
 - **Decide who can create** (table above). On a public deploy, set Every sign-in or `CREATE_KEY`; otherwise anyone can create collections (limited to 20 a minute per address; joins to 30).
 - **Optional: `WEBMCP_ORIGIN_TRIAL_TOKEN`.** Register your origin for [Chrome's WebMCP origin trial](https://developer.chrome.com/origintrials/#/register_trial/4163014905550602241) and set the token, so visitors' Chrome exposes the page's agent tools without flags.
 

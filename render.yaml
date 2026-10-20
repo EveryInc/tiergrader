@@ -1,0 +1,27 @@
+# Render Blueprint: one web service with a 1 GB disk for the SQLite database (uploads included).
+# Disks need a paid instance type. Who can create collections: set EVERY_OAUTH_CLIENT_ID/SECRET
+# for Every sign-in, or keep the generated CREATE_KEY. PUBLIC_URL defaults to Render's own URL.
+services:
+  - type: web
+    name: tiergrader
+    runtime: node
+    plan: starter
+    region: virginia
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    disk:
+      name: tiergrader-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: DATA_DIR
+        value: /data
+      - key: CREATE_KEY
+        generateValue: true
+      - key: EVERY_OAUTH_CLIENT_ID
+        sync: false
+      - key: EVERY_OAUTH_CLIENT_SECRET
+        sync: false

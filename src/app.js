@@ -47,7 +47,7 @@ const publicUser = (u) => ({ name: u.name, email: u.email, tier: u.tier, subscri
 function checkConfig({ every, createKey, publicUrl, allowOpen, hosted }) {
   const publicDeploy = hosted || publicUrl.startsWith("https://");
   if (!every.clientId && !createKey && publicDeploy && !allowOpen) {
-    throw new Error("No EVERY_OAUTH_CLIENT_ID or CREATE_KEY is set, so anyone could create collections. Set one, or ALLOW_OPEN_CREATE=1 if that's intended.");
+    throw new Error("No EVERY_OAUTH_CLIENT_ID or PASSWORD is set, so anyone could create tier grades. Set one, or ALLOW_OPEN_CREATE=1 if that's intended.");
   }
   if (every.clientId) {
     if (!every.clientSecret) throw new Error("EVERY_OAUTH_CLIENT_ID is set without EVERY_OAUTH_CLIENT_SECRET.");
@@ -68,7 +68,8 @@ export function createApp({
   dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || "./data",
   // Render sets RENDER_EXTERNAL_URL for every web service.
   publicUrl = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || "",
-  createKey = process.env.CREATE_KEY || "",
+  // The shared password for creating tier grades (CREATE_KEY is the older name for it).
+  createKey = process.env.PASSWORD || process.env.CREATE_KEY || "",
   originTrialToken = process.env.WEBMCP_ORIGIN_TRIAL_TOKEN || "",
   every = {
     clientId: process.env.EVERY_OAUTH_CLIENT_ID || "",

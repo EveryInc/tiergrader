@@ -3,9 +3,9 @@
 // Three modes, picked from the environment:
 //   every - EVERY_OAUTH_CLIENT_ID is set: sign in with Every (OAuth2 against every.to); Every subscribers
 //           can create collections, in the browser or through agent keys they make on the home page.
-//   key   - only CREATE_KEY is set: whoever has that one key can create.
+//   key   - only PASSWORD is set: whoever has that one password can create.
 //   open  - neither: anyone can create (local use, or a private self-hosted server).
-// CREATE_KEY also works in "every" mode, as an operator override.
+// PASSWORD also works in "every" mode, as an operator override.
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { token } from "./store.js";
 

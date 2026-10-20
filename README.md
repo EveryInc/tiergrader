@@ -57,10 +57,10 @@ Set by environment variables; ranking never needs an account.
 | Setup | Who can create |
 |---|---|
 | `EVERY_OAUTH_CLIENT_ID` + `EVERY_OAUTH_CLIENT_SECRET` (+ `PUBLIC_URL`) | Every subscribers, after signing in with Every. Agents use **agent keys** a subscriber makes on the home page (`Authorization: Bearer tg_…`); a key keeps working while its owner has signed in within the last 30 days. |
-| `CREATE_KEY` only | Anyone with that one shared password (the `x-create-key` header; the home page asks for it). |
+| `PASSWORD` only | Anyone with that one shared password (agents send it as the `x-create-key` header; the home page asks for it). |
 | Neither | Anyone. Fine on your own machine; on Railway or behind https it refuses to start unless you also set `ALLOW_OPEN_CREATE=1`. |
 
-`CREATE_KEY` (the password) also works alongside Every sign-in, as an operator override. Every sign-in is OAuth2 against every.to (PKCE, scope `basic_profile`); tiergrader keeps who you are and whether you subscribe, and drops Every's access token.
+`PASSWORD` also works alongside Every sign-in, as an operator override. Every sign-in is OAuth2 against every.to (PKCE, scope `basic_profile`); tiergrader keeps who you are and whether you subscribe, and drops Every's access token.
 
 Getting an Every OAuth client: ask the Every team to provision one with the redirect URI `<PUBLIC_URL>/auth/every/callback` (exactly, no query string) and the scope `basic_profile`.
 
@@ -76,14 +76,14 @@ Getting an Every OAuth client: ask the Every team to provision one with the redi
 
 The SQLite file holds everything, uploads included, so the server needs a persistent disk.
 
-- **Render:** `render.yaml` is a Blueprint for a web service with a 1 GB disk at `/data` (a paid instance type, since free ones have no disk). It generates a `CREATE_KEY`, and uses Render's own URL unless you set `PUBLIC_URL`.
+- **Render:** `render.yaml` is a Blueprint for a web service with a 1 GB disk at `/data` (a paid instance type, since free ones have no disk). It generates a `PASSWORD`, and uses Render's own URL unless you set `PUBLIC_URL`.
 - **Railway:** `railway.json` is included. Add a volume; the app finds it through `RAILWAY_VOLUME_MOUNT_PATH`.
 - **Anywhere else:** Node 24+, `npm start`, `DATA_DIR` on a persistent disk, health check `/healthz`.
 
 Then:
 
 - **Set `PUBLIC_URL`** to the public address so the links the API hands out are right (Render sets this for you).
-- **Decide who can create** (table above). On a public deploy, set Every sign-in or `CREATE_KEY`; otherwise anyone can create collections (limited to 20 a minute per address; joins to 30).
+- **Decide who can create** (table above). On a public deploy, set Every sign-in or `PASSWORD`; otherwise anyone can create collections (limited to 20 a minute per address; joins to 30).
 - **Optional: `WEBMCP_ORIGIN_TRIAL_TOKEN`.** Register your origin for [Chrome's WebMCP origin trial](https://developer.chrome.com/origintrials/#/register_trial/4163014905550602241) and set the token, so visitors' Chrome exposes the page's agent tools without flags.
 
 Limits: 25 MB per file, 50 MB per upload request, 500 items and 500 people per collection. See `.env.example`.

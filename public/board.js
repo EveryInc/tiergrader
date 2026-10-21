@@ -24,6 +24,7 @@ const state = {
   pendingWrites: 0,
   refreshQueued: false,
   localVersion: 0, // bumped by every local move, so in-flight refreshes can tell they're stale
+  tierTip: null, // the tier whose ⓘ bubble was tapped open
 };
 let byId = new Map();
 let sortables = [];
@@ -424,7 +425,7 @@ function renderBoard() {
   let html = `<div class="board${edit ? "" : " readonly"}">`;
   for (const t of TIERS) {
     html += `<div class="tier-row" data-tier="${t.id}" style="--tier:${t.color}">
-      <div class="tier-label" title="${t.id} tier: ${pointsLabel(t.points)} points"><span class="pts">${pointsLabel(t.points)}</span><span class="letter">${t.id}</span></div>
+      <div class="tier-label"><span class="pts">${pointsLabel(t.points)}</span><span class="letter">${t.id}</span>${tierTipHtml(t)}</div>
       <div class="tier-drop" data-tier="${t.id}">${lists[t.id].map((id) => cardHtml(id, extra?.get(id))).join("")}</div>
     </div>`;
   }
@@ -442,6 +443,18 @@ function renderBoard() {
   </section>`;
   boardScroll.innerHTML = html;
   if (edit) makeSortable();
+}
+
+// The ⓘ in a tier's label: hover or focus shows what the tier means, and a tap pins it open (for touch screens).
+function tierTipHtml(t) {
+  const open = state.tierTip === t.id;
+  return `<button type="button" class="tier-info" data-tier-tip="${t.id}" aria-label="What ${t.id} tier means" aria-describedby="tier-tip-${t.id}" aria-expanded="${open}">i</button>
+    <span class="tier-tip" id="tier-tip-${t.id}" role="tooltip"><b>${t.id} tier · ${pointsLabel(t.points)} points</b>${esc(t.meaning)}</span>`;
+}
+
+function setTierTip(id) {
+  state.tierTip = id;
+  for (const btn of boardScroll.querySelectorAll("[data-tier-tip]")) btn.setAttribute("aria-expanded", btn.dataset.tierTip === id);
 }
 
 function tableHtml() {
@@ -562,7 +575,7 @@ function renderPreview() {
       <button class="icon-btn" data-act="close" title="Close (Esc)" aria-label="Close">✕</button>`;
   }
   const placeRow = editable()
-    ? `<div class="tier-buttons">${TIERS.map((t) => `<button class="tier-btn" style="--tier:${t.color}" data-place="${t.id}" aria-pressed="${locate(me().id, it.id).tier === t.id}" title="${t.id} (${t.points} pts) · press ${t.id} or ${t.points === -1 ? "−" : t.points}">${t.id}</button>`).join("")}</div>`
+    ? `<div class="tier-buttons">${TIERS.map((t) => `<button class="tier-btn" style="--tier:${t.color}" data-place="${t.id}" aria-pressed="${locate(me().id, it.id).tier === t.id}" title="${t.id}: ${esc(t.meaning)} (${t.points} pts) · press ${t.id} or ${t.points === -1 ? "−" : t.points}">${t.id}</button>`).join("")}</div>`
     : `<div class="ratings-line">${ratingsLine(it)}</div>`;
   pBar.innerHTML = `${placeRow}
     <div class="preview-nav">
@@ -872,6 +885,9 @@ function openHelp() {
 
 app.addEventListener("click", (e) => {
   const t = e.target;
+  const tip = t.closest("[data-tier-tip]");
+  if (state.tierTip || tip) setTierTip(tip && state.tierTip !== tip.dataset.tierTip ? tip.dataset.tierTip : null);
+  if (tip) return;
   const card = t.closest(".card");
   if (card) return select(card.dataset.id, { open: true, scroll: false });
   const open = t.closest("[data-open]");
@@ -946,6 +962,7 @@ document.addEventListener("keydown", (e) => {
 
   if (key === "?") return openHelp();
   if (key === "Escape") {
+    if (state.tierTip) return setTierTip(null);
     if (state.preview) select(state.selected, { open: false, scroll: false });
     else select(null);
     return;

@@ -1,12 +1,13 @@
 // Shared by the server and the browser: the tier scale and how rankings are combined.
 
+// meaning: the one line behind each tier's ⓘ bubble. Worded for anything people grade, not just AI output.
 export const TIERS = [
-  { id: "S", points: 4, color: "#ff7f7f" },
-  { id: "A", points: 3, color: "#ffbf7f" },
-  { id: "B", points: 2, color: "#ffdf7f" },
-  { id: "C", points: 1, color: "#ffff7f" },
-  { id: "D", points: 0, color: "#bfff7f" },
-  { id: "F", points: -1, color: "#7fbfff" },
+  { id: "S", points: 4, color: "#ff7f7f", meaning: "Exceptional. Better than you'd expect from the very best." },
+  { id: "A", points: 3, color: "#ffbf7f", meaning: "Excellent. Up there with the best." },
+  { id: "B", points: 2, color: "#ffdf7f", meaning: "Good. Solid, reliable and above average." },
+  { id: "C", points: 1, color: "#ffff7f", meaning: "Average. Middle of the pack; it does the job." },
+  { id: "D", points: 0, color: "#bfff7f", meaning: "Weak. Below average, with real problems." },
+  { id: "F", points: -1, color: "#7fbfff", meaning: "Fails. Unusable, or doesn't do the job." },
 ];
 
 export const UNSORTED = "unsorted"; // shown to people as "Unranked"; the API accepts either word

@@ -26,7 +26,7 @@ const ago = (t) => {
 };
 
 const rated = read("tg.rated");
-const AGENT_PROMPT = agentPrompt({ origin: location.origin, needsKey: boot.auth !== "open" });
+const AGENT_PROMPT = agentPrompt({ origin: location.origin, auth: boot.auth });
 let agentKeys = [];
 const staged = [];
 const main = document.getElementById("home");
@@ -143,7 +143,7 @@ function renderKeys(keys, fresh = null) {
   const origin = location.origin;
   box.innerHTML = `
     <h3>Agent keys</h3>
-    <p>On this server, agents need a key to make tier grades. Make one for each agent you use, and give it the key when it asks.</p>
+    <p>On this server, agents need a key to make tier grades. Most agents can ask for one themselves and send you a link to approve; the keys you've approved show up here. You can also make one by hand for an agent that can't.</p>
     ${fresh ? `<div class="fresh-key">
       <strong>Copy this key now. It won't be shown again.</strong>
       <div class="copy-row"><input class="input" readonly data-select value="${esc(fresh.key)}"><button class="btn" type="button" data-copy="${esc(fresh.key)}">Copy</button></div>

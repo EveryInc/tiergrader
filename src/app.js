@@ -10,7 +10,7 @@ import { EXAMPLES } from "../public/examples.js";
 import { createService } from "./service.js";
 import { createMcpHandler } from "./mcp.js";
 import { llmsTxt, ownerBrief, raterBrief } from "./agent-docs.js";
-import { homePage, boardPage, joinPage, notFoundPage, CDN } from "./pages.js";
+import { homePage, boardPage, joinPage, approvePage, notFoundPage, CDN } from "./pages.js";
 
 const VERSION = "0.1.0";
 const PUBLIC_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "..", "public");
@@ -314,6 +314,15 @@ export function createApp({
           "cache-control": "no-store",
         });
       }
+      // An agent's request for a key, for its person to approve.
+      if ((m = path.match(/^\/approve\/([0-9a-z]+)$/))) {
+        if (auth.mode !== "every") return html(res, 404, notFoundPage("Agents don't need approval on this server."));
+        const r = store.keyRequestByClaim(m[1]);
+        if (!r) return html(res, 404, approvePage({ state: "gone" }));
+        const user = auth.currentUser(req);
+        const state = !user ? "sign-in" : isSubscriber(user) ? "ask" : "not-subscriber";
+        return html(res, 200, approvePage({ state, name: r.name, claim: m[1], user: user && publicUser(user) }));
+      }
       if (path === "/healthz") return json(res, 200, { ok: true });
       if (path === "/llms.txt" || path === "/agents.md") return markdown(res, llmsTxt(base, auth.mode));
       if ((m = path.match(/^\/static\/([\w.-]+)$/))) return serveStatic(res, m[1]);
@@ -360,14 +369,52 @@ export function createApp({
         canCreate: () => {
           if (tooMany(req, "create", 20)) return { ok: false, reason: "Too many new collections from here. Try again in a minute." };
           const who = auth.creator(req, url, base);
-          return who.ok ? { ok: true, userId: who.user?.id ?? null } : { ok: false, reason: who.reason };
+          return who.ok ? { ok: true, userId: who.user?.id ?? null } : { ok: false, reason: `${who.reason}${auth.mode === "every" ? " Over MCP: call request_agent_key." : ""}` };
+        },
+        requestKey: (name) => {
+          if (auth.mode === "open") return { status: "not_needed", message: "Anyone can create collections on this server; no key needed." };
+          if (auth.mode === "key") throw httpError(400, "This server uses one shared password instead of agent keys. Ask its operator.");
+          if (tooMany(req, "agent-key", 10)) throw httpError(429, "Too many key requests from here. Try again in a minute.");
+          return { ...auth.requestAgentKey(name, base), next: "Send approve_url to the person you work for. Once they approve, call /mcp with \"Authorization: Bearer <key>\" (or /mcp?key=<key>) and create_collection works." };
         },
       });
       if (!payload) return send(res, status, "", CORS);
       return json(res, status, payload);
     }
 
+    if ((m = path.match(/^\/approve\/([0-9a-z]+)$/)) && method === "POST") {
+      if (auth.mode !== "every") return html(res, 404, notFoundPage("Agents don't need approval on this server."));
+      if (!auth.sameOrigin(req, base)) return html(res, 403, notFoundPage("Approve agents from tiergrader's own page."));
+      const r = store.keyRequestByClaim(m[1]);
+      if (!r) return html(res, 404, approvePage({ state: "gone" }));
+      const user = auth.currentUser(req);
+      if (!user) return html(res, 401, approvePage({ state: "sign-in", name: r.name, claim: m[1] }));
+      if (!isSubscriber(user)) return html(res, 403, approvePage({ state: "not-subscriber", name: r.name, user: publicUser(user) }));
+      const decision = new URLSearchParams((await readBody(req, 10_000)).toString("utf8")).get("decision");
+      if (decision === "deny") {
+        store.denyKeyRequest(m[1]);
+        return html(res, 200, approvePage({ state: "denied", name: r.name }));
+      }
+      if (decision !== "approve") return html(res, 400, notFoundPage("Choose Approve or Don't allow."));
+      if (store.listAgentKeys(user.id).length >= 20) return html(res, 400, notFoundPage("You have 20 agent keys already. Delete one under Agent on the home page, then open this link again."));
+      store.approveKeyRequest(m[1], user.id);
+      return html(res, 200, approvePage({ state: "approved", name: r.name }));
+    }
+
     if (!path.startsWith("/api/")) return html(res, 404, notFoundPage());
+
+    // Agents get a key on their person's behalf: no password, no key made by hand. See /llms.txt.
+    if (path === "/api/agent-keys" && method === "POST") {
+      if (auth.mode === "open") return json(res, 200, { status: "not_needed", message: "Anyone can create collections on this server; no key needed." });
+      if (auth.mode === "key") throw httpError(400, "This server uses one shared password instead of agent keys. Ask its operator.");
+      if (tooMany(req, "agent-key", 10)) throw httpError(429, "Too many key requests from here. Try again in a minute.");
+      const made = auth.requestAgentKey((await readJson(req)).name, base);
+      return json(res, 201, {
+        ...made,
+        next: `Send approve_url to the person you work for and ask them to approve. Keep the key private, like a password. Once they approve, send it as "Authorization: Bearer <key>" to create collections. GET ${base}/api/agent-keys/status with the key tells you when it's approved.`,
+      });
+    }
+    if (path === "/api/agent-keys/status" && method === "GET") return json(res, 200, auth.keyStatus(req, url, base));
 
     // Live updates
     if ((m = path.match(/^\/api\/events\/(o|r)\/([0-9a-z]+)$/)) && method === "GET") {

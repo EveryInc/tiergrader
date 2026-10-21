@@ -161,6 +161,16 @@ export function openStore(dataDir) {
       created_at TEXT NOT NULL,
       last_used_at TEXT
     );
+    -- Keys an agent asked for and its person hasn't approved yet. The agent already holds the key; only its
+    -- digest is kept, and it does nothing until someone signed in opens /approve/<claim> and approves it.
+    CREATE TABLE IF NOT EXISTS key_requests (
+      claim TEXT PRIMARY KEY,
+      digest TEXT NOT NULL UNIQUE,
+      hint TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
   `);
   // Added after the first release: which signed-in creator made a collection, and the owner's own ranking.
   const collectionColumns = db.prepare("PRAGMA table_info(collections)").all().map((c) => c.name);
@@ -264,6 +274,35 @@ export function openStore(dataDir) {
     deleteAgentKey(userId, id) {
       return q("DELETE FROM agent_keys WHERE id = ? AND user_id = ?").run(id, userId).changes > 0;
     },
+    // ----- keys agents ask for, waiting on their person's approval -----
+
+    createKeyRequest({ claim, digest, hint, name, minutes }) {
+      const t = new Date();
+      q("DELETE FROM key_requests WHERE expires_at < ?").run(t.toISOString());
+      const expires = new Date(t.getTime() + minutes * 60_000).toISOString();
+      q("INSERT INTO key_requests (claim, digest, hint, name, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(claim, digest, hint, String(name || "Agent").replace(/\s+/g, " ").trim().slice(0, LIMITS.nameChars) || "Agent", t.toISOString(), expires);
+      return q("SELECT * FROM key_requests WHERE claim = ?").get(claim);
+    },
+    keyRequestByClaim(claim) {
+      return q("SELECT * FROM key_requests WHERE claim = ? AND expires_at > ?").get(claim, now());
+    },
+    keyRequestByDigest(digest) {
+      return q("SELECT * FROM key_requests WHERE digest = ? AND expires_at > ?").get(digest, now());
+    },
+    // Approving turns the waiting key into an ordinary agent key of this user's; the request is used up either way.
+    approveKeyRequest(claim, userId) {
+      return tx(() => {
+        const r = store.keyRequestByClaim(claim);
+        if (!r) return null;
+        q("DELETE FROM key_requests WHERE claim = ?").run(claim);
+        return store.createAgentKey(userId, r.name, r.digest, r.hint);
+      });
+    },
+    denyKeyRequest(claim) {
+      return q("DELETE FROM key_requests WHERE claim = ?").run(claim).changes > 0;
+    },
+
     userByAgentKey(digest) {
       const u = q(`SELECT u.*, k.id AS key_id FROM agent_keys k JOIN users u ON u.id = k.user_id WHERE k.digest = ?`).get(digest);
       if (u) q("UPDATE agent_keys SET last_used_at = ? WHERE id = ?").run(now(), u.key_id);

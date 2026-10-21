@@ -14,6 +14,17 @@ const TIER_ENUM = ["S", "A", "B", "C", "D", "F", "unsorted"];
 
 const TOOLS = [
   {
+    name: "request_agent_key",
+    description:
+      "Only when create_collection says it needs an agent key and you have none: ask for one on behalf of the person you work for. " +
+      "Returns a key and an approve_url. Send the approve_url to your person (never ask them for a password); the key works once they approve. " +
+      "Then call this server as /mcp with \"Authorization: Bearer <key>\" (or /mcp?key=<key>). Keep the key private.",
+    inputSchema: {
+      type: "object",
+      properties: { name: { type: "string", description: "Your name as your person knows you, e.g. 'Claude in Slack'. Shown on the approve page." } },
+    },
+  },
+  {
     name: "create_collection",
     description: "Create a tiergrader collection. Returns the owner link (keep it private: it controls the collection), an open join link, and the owner token the other tools take.",
     inputSchema: {
@@ -145,8 +156,10 @@ export function createMcpHandler({ store, service, version }) {
     return r;
   };
 
-  const call = (name, args, base, canCreate) => {
+  const call = (name, args, base, canCreate, requestKey) => {
     switch (name) {
+      case "request_agent_key":
+        return requestKey(args.name);
       case "create_collection": {
         const who = canCreate();
         if (!who.ok) throw httpError(403, who.reason);
@@ -188,7 +201,7 @@ export function createMcpHandler({ store, service, version }) {
     }
   };
 
-  const handle = (msg, base, canCreate) => {
+  const handle = (msg, base, canCreate, requestKey) => {
     const { id, method } = msg ?? {};
     const params = msg?.params ?? {};
     const reply = (result) => ({ jsonrpc: "2.0", id, result });
@@ -205,7 +218,8 @@ export function createMcpHandler({ store, service, version }) {
           instructions:
             "tiergrader: people rank items into S/A/B/C/D/F tiers (S=4 ... F=-1), each on their own personal link. " +
             "Workflow: create_collection -> add_items -> create_rater_links -> send each person their link -> get_results. " +
-            "The owner link controls the collection; give it to the user and keep it out of shared channels.",
+            "The owner link controls the collection; give it to the user and keep it out of shared channels. " +
+            "If create_collection says it needs an agent key you don't have, call request_agent_key and send your person the approve link; never ask them for a password.",
         });
       }
       case "ping":
@@ -214,7 +228,7 @@ export function createMcpHandler({ store, service, version }) {
         return reply({ tools: TOOLS });
       case "tools/call": {
         try {
-          const result = call(params.name, params.arguments ?? {}, base, canCreate);
+          const result = call(params.name, params.arguments ?? {}, base, canCreate, requestKey);
           return reply({ content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result });
         } catch (err) {
           if (err.rpcCode) return fail(err.rpcCode, err.message);
@@ -227,10 +241,11 @@ export function createMcpHandler({ store, service, version }) {
   };
 
   // body: parsed JSON (one message or a batch). Returns [status, payload | null].
-  return function handleMcp(body, base, { canCreate = () => ({ ok: true, userId: null }) } = {}) {
+  const noKeyNeeded = () => ({ status: "not_needed", message: "Anyone can create collections on this server; no key needed." });
+  return function handleMcp(body, base, { canCreate = () => ({ ok: true, userId: null }), requestKey = noKeyNeeded } = {}) {
     const batch = Array.isArray(body);
     if (batch && !body.length) return [200, { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid request: empty batch" } }];
-    const replies = (batch ? body : [body]).map((m) => handle(m, base, canCreate)).filter(Boolean);
+    const replies = (batch ? body : [body]).map((m) => handle(m, base, canCreate, requestKey)).filter(Boolean);
     if (!replies.length) return [202, null];
     return [200, batch ? replies : replies[0]];
   };

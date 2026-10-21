@@ -10,6 +10,8 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { token } from "./store.js";
 
 const SESSION_DAYS = 30;
+// How long an agent's approval link stays open.
+const REQUEST_MINUTES = 60;
 // Agent keys keep working while their owner has signed in (and so re-confirmed the subscription) this recently.
 const KEY_FRESH_DAYS = 30;
 
@@ -80,6 +82,10 @@ export function createAuth({ store, every = {}, createKey = "", publicUrl = "" }
     return String(bearer || req.headers["x-create-key"] || url?.searchParams.get("key") || "").trim();
   };
 
+  const approveUrl = (base, claim) => `${origin(base)}/approve/${claim}`;
+  const howToGetAKey = (base) =>
+    `Agents: get a key yourself, without anyone's password: POST ${origin(base)}/api/agent-keys {"name": "<your name>"}. It returns a key and a link; send the link to the person you work for, and the key works once they approve it.`;
+
   function currentUser(req) {
     const sid = sessionFrom(req);
     return (sid && store.userBySession(digest(sid))) || null;
@@ -100,6 +106,10 @@ export function createAuth({ store, every = {}, createKey = "", publicUrl = "" }
       let user = null;
       if (key.startsWith("tg_")) {
         user = store.userByAgentKey(digest(key));
+        const waiting = !user && store.keyRequestByDigest(digest(key));
+        if (waiting) {
+          return { ok: false, status: 401, reason: `This agent key is waiting for its person to approve it at ${approveUrl(base, waiting.claim)}. Try again once they have.` };
+        }
         if (user && !keyIsFresh(user)) {
           return { ok: false, status: 401, reason: `This agent key's owner needs to sign in at ${origin(base)} again (every ${KEY_FRESH_DAYS} days) to keep it working.` };
         }
@@ -111,7 +121,7 @@ export function createAuth({ store, every = {}, createKey = "", publicUrl = "" }
         return {
           ok: false,
           status: 401,
-          reason: "Sign in with Every to create collections. Agents: make an agent key on the home page and send it as \"Authorization: Bearer tg_...\".",
+          reason: `Creating collections needs an agent key or an Every sign-in. ${howToGetAKey(base)} Send it as "Authorization: Bearer tg_...". People sign in with Every on the home page.`,
         };
       }
       if (!isSubscriber(user)) {
@@ -201,6 +211,25 @@ export function createAuth({ store, every = {}, createKey = "", publicUrl = "" }
       if (sid) store.deleteSession(digest(sid));
       res.writeHead(303, { location: "/", "set-cookie": cookie(names(base).session, "", { maxAge: 0, secure: secure(base) }), "cache-control": "no-store" });
       res.end();
+    },
+
+    // An agent asks for a key on its person's behalf. The key comes back now but does nothing until someone
+    // signed in with Every approves it at the link, which makes it one of their agent keys.
+    requestAgentKey(name, base) {
+      const key = `tg_${token(32)}`;
+      const r = store.createKeyRequest({ claim: token(24), digest: digest(key), hint: key.slice(-4), name, minutes: REQUEST_MINUTES });
+      return { key, status: "waiting", name: r.name, approve_url: approveUrl(base, r.claim), expires_at: r.expires_at };
+    },
+
+    // What an agent's key can do right now: active, waiting (for approval), stale (owner must sign in again) or unknown.
+    keyStatus(req, url, base) {
+      const key = keyFrom(req, url);
+      if (!key.startsWith("tg_")) return { status: "unknown" };
+      const user = store.userByAgentKey(digest(key));
+      if (user) return keyIsFresh(user) ? { status: "active", owner: user.name } : { status: "stale", owner: user.name, sign_in_url: origin(base) };
+      const waiting = store.keyRequestByDigest(digest(key));
+      if (waiting) return { status: "waiting", name: waiting.name, approve_url: approveUrl(base, waiting.claim), expires_at: waiting.expires_at };
+      return { status: "unknown" };
     },
 
     // The key itself is returned once; only its digest is stored.

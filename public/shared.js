@@ -2,12 +2,12 @@
 
 // meaning: the one line behind each tier's ⓘ bubble. Worded for anything people grade, not just AI output.
 export const TIERS = [
-  { id: "S", points: 4, color: "#ff7f7f", meaning: "Exceptional. Better than you'd expect from the very best." },
-  { id: "A", points: 3, color: "#ffbf7f", meaning: "Excellent. Up there with the best." },
-  { id: "B", points: 2, color: "#ffdf7f", meaning: "Good. Solid, reliable and above average." },
-  { id: "C", points: 1, color: "#ffff7f", meaning: "Average. Middle of the pack; it does the job." },
-  { id: "D", points: 0, color: "#bfff7f", meaning: "Weak. Below average, with real problems." },
-  { id: "F", points: -1, color: "#7fbfff", meaning: "Fails. Unusable, or doesn't do the job." },
+  { id: "S", points: 4, color: "#ff7f7f", meaning: "Exceptional. The best of the best." },
+  { id: "A", points: 3, color: "#ffbf7f", meaning: "Excellent. Close to the best." },
+  { id: "B", points: 2, color: "#ffdf7f", meaning: "Good. Solid and above average." },
+  { id: "C", points: 1, color: "#ffff7f", meaning: "Average. Does the job." },
+  { id: "D", points: 0, color: "#bfff7f", meaning: "Weak. Below average." },
+  { id: "F", points: -1, color: "#7fbfff", meaning: "Fails. Unusable." },
 ];
 
 export const UNSORTED = "unsorted"; // shown to people as "Unranked"; the API accepts either word

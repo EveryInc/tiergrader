@@ -180,3 +180,95 @@ test("failed create attempts are rate-limited", async () => {
   for (let i = 0; i < 22; i++) last = await post("/api/collections", { title: "x" }, { authorization: "Bearer tg_wrongwrongwrongwrongwrongwrongwr", "x-forwarded-for": "203.0.113.9" });
   assert.equal(last.status, 429);
 });
+
+test("an agent gets a key on its person's behalf: it works only once they approve it", async () => {
+  // No password, no sign-in: the agent asks, and gets a key that does nothing yet plus a link for its person.
+  const asked = await post("/api/agent-keys", { name: "Claude in Slack" });
+  assert.equal(asked.status, 201);
+  const { key, approve_url, status } = await asked.json();
+  assert.match(key, /^tg_[0-9a-z]{32}$/);
+  assert.equal(status, "waiting");
+  const approve = new URL(approve_url).pathname;
+  assert.match(approve, /^\/approve\/[0-9a-z]{24}$/);
+
+  const auth = { authorization: `Bearer ${key}` };
+  const early = await post("/api/collections", { title: "Too soon" }, auth);
+  assert.equal(early.status, 401);
+  assert.ok((await early.json()).error.includes(approve_url), "the refusal hands the agent its link again");
+  assert.equal((await (await fetch(`${base}/api/agent-keys/status`, { headers: auth })).json()).status, "waiting");
+
+  // Signed out, the link sends the person through Every sign-in and back to it.
+  const page = await (await fetch(base + approve)).text();
+  assert.match(page, /Claude in Slack/);
+  assert.ok(page.includes(`/auth/every?return_to=${approve}`));
+  const start = await fetch(`${base}/auth/every?return_to=${approve}`, { redirect: "manual" });
+  const state = new URL(start.headers.get("location")).searchParams.get("state");
+  const returned = await fetch(`${base}/auth/every/callback?code=sub&state=${state}`, { redirect: "manual", headers: { cookie: cookiesOf(start).join("; ") } });
+  assert.equal(returned.headers.get("location"), approve);
+  const cookie = cookiesOf(returned).join("; ");
+
+  const signedIn = await (await fetch(base + approve, { headers: { cookie } })).text();
+  assert.match(signedIn, /value="approve"/);
+  assert.match(signedIn, /Kieran/);
+
+  const form = (decision, headers = {}) =>
+    fetch(base + approve, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", cookie, ...headers }, body: `decision=${decision}` });
+  assert.equal((await form("approve", { origin: "https://evil.example" })).status, 403, "approving must happen on tiergrader's own page");
+  assert.equal((await fetch(base + approve, { method: "POST", body: "decision=approve" })).status, 401, "and by someone signed in");
+
+  const approved = await form("approve");
+  assert.equal(approved.status, 200);
+  assert.match(await approved.text(), /Approved/);
+
+  assert.equal((await post("/api/collections", { title: "From Slack" }, auth)).status, 201);
+  assert.deepEqual(await (await fetch(`${base}/api/agent-keys/status`, { headers: auth })).json(), { status: "active", owner: "Kieran" });
+  const me = await (await fetch(`${base}/api/me`, { headers: { cookie } })).json();
+  const listed = me.agent_keys.find((k) => k.name === "Claude in Slack");
+  assert.equal(listed.hint, key.slice(-4), "it's an ordinary agent key of theirs, deletable on the home page");
+  assert.ok(me.collections.some((c) => c.title === "From Slack"));
+
+  // The link is used up.
+  assert.equal((await fetch(base + approve, { headers: { cookie } })).status, 404);
+  assert.equal((await form("approve")).status, 404);
+});
+
+test("a key request can be turned down, expires, and needs a subscriber", async () => {
+  const { cookie } = await signIn("sub");
+  const ask = async () => {
+    const r = await (await post("/api/agent-keys", { name: "Some agent" })).json();
+    return { ...r, path: new URL(r.approve_url).pathname, auth: { authorization: `Bearer ${r.key}` } };
+  };
+  const decide = (path, decision, c = cookie) =>
+    fetch(base + path, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", cookie: c }, body: `decision=${decision}` });
+
+  const denied = await ask();
+  assert.match(await (await decide(denied.path, "deny")).text(), /didn.t get a key/);
+  assert.equal((await post("/api/collections", { title: "x" }, denied.auth)).status, 401);
+  assert.equal((await (await fetch(`${base}/api/agent-keys/status`, { headers: denied.auth })).json()).status, "unknown");
+
+  const free = await signIn("free");
+  const blocked = await ask();
+  assert.match(await (await fetch(base + blocked.path, { headers: { cookie: free.cookie } })).text(), /Every subscription/);
+  assert.equal((await decide(blocked.path, "approve", free.cookie)).status, 403);
+  assert.equal((await post("/api/collections", { title: "x" }, blocked.auth)).status, 401);
+
+  const old = await ask();
+  app.store.db.prepare("UPDATE key_requests SET expires_at = ? WHERE digest IS NOT NULL").run("2020-01-01T00:00:00.000Z");
+  assert.equal((await fetch(base + old.path, { headers: { cookie } })).status, 404);
+  assert.equal((await decide(old.path, "approve")).status, 404);
+  assert.equal((await post("/api/collections", { title: "x" }, old.auth)).status, 401);
+});
+
+test("over MCP, an agent without a key is told how to get one, and can", async () => {
+  const rpc = (name, args, headers = {}) =>
+    post("/mcp", { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }, headers).then((r) => r.json());
+  const refused = await rpc("create_collection", { title: "No key" });
+  assert.equal(refused.result.isError, true);
+  assert.match(refused.result.content[0].text, /request_agent_key/);
+
+  const got = (await rpc("request_agent_key", { name: "MCP agent" })).result.structuredContent;
+  assert.equal(got.status, "waiting");
+  const { cookie } = await signIn("sub");
+  await fetch(new URL(got.approve_url).pathname.replace(/^/, base), { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", cookie }, body: "decision=approve" });
+  assert.equal((await rpc("create_collection", { title: "With key" }, { authorization: `Bearer ${got.key}` })).result.isError, undefined);
+});

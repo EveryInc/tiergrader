@@ -4,8 +4,18 @@
 const SCALE = "S = 4, A = 3, B = 2, C = 1, D = 0, F = -1. Items not yet placed are `unsorted` and don't count.";
 
 const CREATE_AUTH = {
-  every: (base) =>
-    `**Creating collections on this server needs an agent key.** An Every subscriber signs in at ${base}, makes an agent key on the home page, and gives it to you. Send it as \`Authorization: Bearer tg_...\` when creating a collection (REST or MCP; MCP clients that can't set headers can use \`${base}/mcp?key=tg_...\`). Nothing else needs it: owner and personal links are their own keys, and ranking never needs an account.`,
+  every: (base) => `**Creating collections on this server needs an agent key, and you can get one yourself.** Never ask your person for a password, and don't ask them to make a key by hand:
+
+1. Ask for a key on their behalf. No sign-in needed:
+
+   \`\`\`sh
+   curl -s -X POST ${base}/api/agent-keys -H 'content-type: application/json' -d '{"name": "Claude in Slack"}'
+   \`\`\`
+   Returns \`key\` (\`tg_...\`) and \`approve_url\`. The key does nothing yet. Keep it private, like a password: don't post it in a shared channel.
+2. Send your person the \`approve_url\` ("Open this to let me make tier grades for you"). They sign in with Every if they aren't already and press Approve. The link lasts an hour.
+3. Send the key as \`Authorization: Bearer tg_...\` when creating a collection (REST or MCP; MCP clients that can't set headers can use \`${base}/mcp?key=tg_...\`, and over MCP the \`request_agent_key\` tool does step 1). \`GET ${base}/api/agent-keys/status\` with the key says \`waiting\`, \`active\` or \`stale\`; until it's approved, creating answers 401 with the link again.
+
+Save the key and reuse it: it keeps working while its owner signs in at least every 30 days. Nothing else needs it: owner and personal links are their own keys, and ranking never needs an account.`,
   key: () =>
     "**Creating collections on this server needs its password**, sent as `x-create-key: <password>` (or `/mcp?key=...`). Nothing else needs it: owner and personal links are their own keys.",
   open: () => "",
@@ -111,7 +121,7 @@ Without WebMCP, the same functions are on \`window.tiergrader\` (\`await tiergra
 
 ## MCP server
 
-\`${base}/mcp\` is a remote MCP server (streamable HTTP, no sign-in) with the same operations: \`create_collection\`, \`add_items\`, \`get_collection\`, \`create_rater_links\`, \`get_results\`, \`update_collection\`, \`remove_item\`, \`get_board\`, \`read_item\`, \`place_items\`. Tools take the owner or personal link (or bare token) as an argument.
+\`${base}/mcp\` is a remote MCP server (streamable HTTP, no sign-in) with the same operations: \`request_agent_key\`, \`create_collection\`, \`add_items\`, \`get_collection\`, \`create_rater_links\`, \`get_results\`, \`update_collection\`, \`remove_item\`, \`get_board\`, \`read_item\`, \`place_items\`. Tools take the owner or personal link (or bare token) as an argument.
 `;
 }
 

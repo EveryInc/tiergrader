@@ -303,3 +303,10 @@ test("examples: each visitor grades on their own guest link and sees Dan and Kat
   const home = (await call("GET", "/")).body;
   assert.match(home, /"slug":"logos"/);
 });
+
+test("on an open server, agents are told they need no key", async () => {
+  const r = await call("POST", "/api/agent-keys", { name: "Claude" });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.status, "not_needed");
+  assert.equal((await call("GET", "/approve/abc")).status, 404);
+});

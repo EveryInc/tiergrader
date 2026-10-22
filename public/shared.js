@@ -16,7 +16,8 @@ export const UNSORTED = "unsorted"; // shown to people as "Unranked"; the API ac
 export const LOCKUP_HTML = `<span class="lockup"><a class="every-logo" href="https://every.to" aria-label="Every"><img src="/static/every-wordmark.svg" alt="Every" width="72" height="20"></a><span class="lockup-sep" aria-hidden="true">/</span><a class="product" href="/">tiergrader</a></span>`;
 
 // The prompt behind every "Agent" button: say what tiergrader is, then have the agent ask before acting.
-export function agentPrompt({ origin, ownerUrl = "", personalUrl = "", needsKey = false }) {
+// auth: "every" | "key" | "open", how this server decides who can create (see src/auth.js).
+export function agentPrompt({ origin, ownerUrl = "", personalUrl = "", auth = "open" }) {
   const intro =
     `tiergrader (${origin}) gets people to grade things. Each file becomes a card, and each person drags the cards into ` +
     `S, A, B, C, D or F tiers (worth 4, 3, 2, 1, 0 and -1 points) on their own private link. The owner sees everyone's ` +
@@ -30,7 +31,11 @@ export function agentPrompt({ origin, ownerUrl = "", personalUrl = "", needsKey 
   return (
     `${intro}\n\nAsk me what I want graded (files, drafts, outputs, and where they are) and who should grade them. ` +
     `Then make the tier grade, upload everything, make a personal link for each person, and give me the owner link and each person's link.` +
-    (needsKey ? " Making a tier grade on this server needs a password or key: ask me for it." : "")
+    (auth === "every"
+      ? " Making a tier grade here needs an agent key: get one yourself as llms.txt says, and send me the approve link it gives you. Don't ask me for a password."
+      : auth === "key"
+        ? " Making a tier grade on this server needs its password: ask me for it."
+        : "")
   );
 }
 

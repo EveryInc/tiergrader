@@ -25,7 +25,11 @@ If the user hands you a link, `curl -s <link>?format=md` tells you what it is an
      -H "authorization: Bearer $TIERGRADER_KEY" \
      -d '{"title": "Which intro is best?", "description": "Would you keep reading after two paragraphs?"}'
    ```
-   On a server with Every sign-in (like the hosted one), creating needs an agent key (`tg_...`). If `$TIERGRADER_KEY` isn't set, ask the user to sign in at `$TIERGRADER_URL`, make an agent key on the home page, and give it to you. Only creating needs it; every other call uses the links.
+   On a server with Every sign-in (like the hosted one), creating needs an agent key (`tg_...`). If you don't have one, get it yourself; never ask the user for a password:
+   ```sh
+   curl -s -X POST $TIERGRADER_URL/api/agent-keys -H 'content-type: application/json' -d '{"name": "Claude"}'
+   ```
+   Send the user the `approve_url` it returns ("Open this to let me make tier grades for you") and keep the `key` to yourself; never post it in a shared channel. Once they approve (`GET $TIERGRADER_URL/api/agent-keys/status` with the key says `active`), create the collection with it, and save it for next time. Only creating needs it; every other call uses the links.
    Keep `api_url` from the response; tell the user the `owner_url`.
 
 2. **Upload the files.** `curl -s -X POST $API_URL/items -F file=@a.md -F file=@b.md ...` (25 MB each). For text you have in hand, send JSON: `{"items": [{"title": "Post A", "text": "..."}]}`.

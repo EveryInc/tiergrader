@@ -59,7 +59,7 @@ export function homePage(base, boot) {
     body: `<main id="home" class="home"></main>
 <script id="boot" type="application/json">${safeJson(boot)}</script>
 <details class="agent-brief" id="agent-brief"><summary>Agent brief</summary><pre>tiergrader: upload files, make links, have people rank them S/A/B/C/D/F.
-Agents: read ${esc(base)}/llms.txt for the API (create a collection, upload files, make personal links, read results).</pre></details>`,
+Agents: read ${esc(base)}/llms.txt for the API (create a collection, upload files, make personal links, read results). If creating needs an agent key, get one yourself (POST /api/agent-keys) and send your person the approve link; never ask them for a password.</pre></details>`,
     scripts: ["/static/home.js"],
   });
 }
@@ -84,6 +84,35 @@ export function joinPage({ collection, code, count }) {
 <script id="boot" type="application/json">${safeJson({ code, title: collection.title, description: collection.description, count })}</script>
 ${agentBrief(`Open link to join the tiergrader collection "${collection.title}" (${count} items). POST /api/j/${code} with {"name": "..."} to get a personal ranking link.`)}`,
     scripts: ["/static/join.js"],
+  });
+}
+
+// Where a person approves (or turns down) an agent's request for a key. Plain HTML forms, no script.
+// state: "ask" | "sign-in" | "not-subscriber" | "approved" | "denied" | "gone"
+export function approvePage({ state, name = "", claim = "", user = null }) {
+  const agent = `<strong>${esc(name)}</strong>`;
+  const who = user ? `<p style="color: var(--muted)">Signed in as ${esc(user.name)} (${esc(user.email)}).</p>` : "";
+  const bodies = {
+    ask: `<h1>Let ${esc(name)} make tier grades for you?</h1>
+<p>An agent called ${agent} asked for a key to create tier grades in your name. Approve it only if you just asked an agent to do this.</p>
+<p>It can create collections and manage the ones it makes. It can't see your other tier grades or your Every account, and you can delete its key any time under Agent on the <a href="/">home page</a>.</p>
+${who}
+<form method="post" action="/approve/${esc(claim)}" class="create-row">
+<button class="btn primary" name="decision" value="approve">Approve</button>
+<button class="btn ghost" name="decision" value="deny">Don't allow</button>
+</form>`,
+    "sign-in": `<h1>Let ${esc(name)} make tier grades for you?</h1>
+<p>An agent called ${agent} asked for a key to create tier grades in your name. Sign in with Every to approve it.</p>
+<p><a class="btn primary" href="/auth/every?return_to=/approve/${esc(claim)}">Sign in with Every</a></p>`,
+    "not-subscriber": `<h1>This needs an Every subscription</h1>
+<p>${agent} asked to make tier grades for you, but making them here is for Every subscribers. tiergrader is open source, so you can also run your own.</p>${who}`,
+    approved: `<h1>Approved</h1><p>${agent} can now make tier grades for you. Go back to your agent; it can carry on.</p><p style="color: var(--muted)">Delete its key any time under Agent on the <a href="/">home page</a>.</p>`,
+    denied: `<h1>Not allowed</h1><p>${agent} didn't get a key. Nothing else changed.</p>`,
+    gone: `<h1>This link has expired</h1><p>It was already used, or it's more than an hour old. Ask your agent for a new one.</p>`,
+  };
+  return shell({
+    title: "Approve an agent · tiergrader",
+    body: `<main class="notfound approve">${LOCKUP_HTML}${bodies[state] || bodies.gone}</main>`,
   });
 }
 

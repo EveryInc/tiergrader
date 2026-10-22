@@ -358,11 +358,12 @@ function render() {
 function renderTitle() {
   const c = state.data.collection;
   document.title = `${c.title} · tiergrader`;
-  if (titleWrap.contains(document.activeElement) && document.activeElement.isContentEditable) return;
-  // The note for raters only shows when there is one; owners edit it under Share.
+  // One line each up here; clicking either opens the whole title and note (owners edit both there).
   titleWrap.innerHTML = `
-    <h1 ${OWNER ? `contenteditable="plaintext-only" spellcheck="false" data-edit="title" title="Rename"` : ""}>${esc(c.title)}</h1>
-    ${c.description ? `<p title="${esc(c.description)}">${esc(c.description)}</p>` : ""}`;
+    <h1><button class="title-btn" data-act="about" title="${OWNER ? "Show the full title and note, or edit them" : "Show the full title and note"}">${esc(c.title)}</button></h1>
+    ${c.description ? `<p data-act="about">${esc(c.description)}</p>` : ""}`;
+  const about = document.querySelector("dialog.about[open]");
+  if (about) fillAbout(about);
 }
 
 function renderActions() {
@@ -716,12 +717,7 @@ function scrollToSelected() {
 async function saveEdit(el) {
   const value = el.textContent.trim();
   try {
-    if (el.dataset.edit) {
-      const field = el.dataset.edit;
-      if (field === "title" && !value) return renderTitle();
-      if (value === (state.data.collection[field] || "")) return;
-      await api("", { method: "PATCH", json: { [field]: value } });
-    } else if (el.dataset.editItem) {
+    if (el.dataset.editItem) {
       const it = byId.get(el.dataset.editItem);
       if (!value || value === it.title) return (el.textContent = it.title);
       await api(`/items/${it.id}`, { method: "PATCH", json: { title: value } });
@@ -890,6 +886,59 @@ function openShare() {
   setTimeout(() => dlg.querySelector("input[name=names]")?.focus(), 30);
 }
 
+// The whole title and note, which the top bar cuts to one line each, plus a few facts about the grade.
+function openAbout() {
+  const c = state.data.collection;
+  const fields = OWNER
+    ? `<section class="dlg-section">
+      <h3>Title</h3>
+      <input class="input" data-about="title" maxlength="200" autocomplete="off" value="${esc(c.title)}">
+    </section>
+    <section class="dlg-section">
+      <h3>Note for raters</h3>
+      <p>Optional. Shown under the title on everyone's page, e.g. what to judge on.</p>
+      <textarea class="input" rows="4" data-about="description" placeholder="e.g. Would you keep reading after the first paragraph?">${esc(c.description)}</textarea>
+    </section>`
+    : `<p class="about-note" data-about-note></p>`;
+  const dlg = openDialog(c.title, `${fields}<p class="about-facts" data-about-facts></p>`, (d) => {
+    d.classList.add("about");
+    d.querySelector('[data-about="title"]')?.addEventListener("keydown", (e) => e.key === "Enter" && e.target.blur());
+    d.addEventListener("change", async (e) => {
+      const field = e.target.dataset.about;
+      if (!field) return;
+      const value = e.target.value.trim();
+      if (field === "title" && !value) return (e.target.value = state.data.collection.title);
+      if (value === (state.data.collection[field] || "")) return;
+      try {
+        await api("", { method: "PATCH", json: { [field]: value } });
+        await refresh();
+        toast(field === "title" ? "Renamed" : value ? "Note saved" : "Note removed");
+      } catch (err) {
+        toast(err.message);
+      }
+    });
+  });
+  fillAbout(dlg);
+}
+
+function fillAbout(dlg) {
+  const c = state.data.collection;
+  dlg.querySelector(".dlg-head h2").textContent = c.title;
+  const note = dlg.querySelector("[data-about-note]");
+  if (note) {
+    note.textContent = c.description || "No note from the person who made this.";
+    note.classList.toggle("empty", !c.description);
+  }
+  // Live updates from other tabs fill the fields, except the one being typed in.
+  for (const input of dlg.querySelectorAll("[data-about]")) if (input !== document.activeElement) input.value = c[input.dataset.about] || "";
+  const total = items().length;
+  const facts = [plural(total, "file"), `you've ranked ${rankedCount(me().id)} of ${total}`];
+  if (others().length) facts.splice(1, 0, plural(people().length, "person", "people"));
+  const made = new Date(c.created_at);
+  if (!isNaN(made)) facts.push(`made ${made.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`);
+  dlg.querySelector("[data-about-facts]").textContent = facts.join(" · ").replace(/^./, (ch) => ch.toUpperCase());
+}
+
 // One prompt to paste into any agent: what tiergrader is, this page's link, and to ask before acting.
 function openAgent() {
   const prompt = agentPrompt(OWNER ? { origin: location.origin, ownerUrl: state.data.links.owner_url } : { origin: location.origin, personalUrl: state.data.me.url });
@@ -960,6 +1009,7 @@ app.addEventListener("click", (e) => {
   else if (act === "next") step(1);
   else if (act === "close") select(null, { open: false });
   else if (act === "remove-item") removeItem(state.selected);
+  else if (act === "about") openAbout();
 });
 
 // Read-only fields (links) select themselves on focus; inline handlers are blocked by the page's CSP.
@@ -991,7 +1041,7 @@ document.addEventListener("keydown", (e) => {
       el.blur();
     }
     if (e.key === "Escape") {
-      el.textContent = el.dataset.editItem ? byId.get(el.dataset.editItem)?.title : state.data.collection[el.dataset.edit] || "";
+      el.textContent = byId.get(el.dataset.editItem)?.title ?? el.textContent;
       el.blur();
     }
     return;

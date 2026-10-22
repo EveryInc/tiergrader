@@ -285,6 +285,11 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
 .home-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line-2); }
 .home-actions { display: flex; align-items: center; gap: 8px; }
 .account { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-2); }
+/* Your name in the nav: goes to your collections on the home page. */
+.me { flex: none; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/1 var(--sans); color: var(--ink-2); text-decoration: none; }
+.me:hover { color: var(--ink); text-decoration: underline; }
+#collections { scroll-margin-top: 16px; }
+.owned-empty { color: var(--muted); font-size: 14px; margin: 0; }
 
 .hero {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); grid-template-areas: "copy demo" "form demo";
@@ -390,6 +395,7 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
   .title-wrap { padding-left: 0; border-left: 0; }
   .topbar { flex-wrap: wrap; }
   .people { order: 3; flex-basis: 100%; max-width: none; }
+  .topbar .me { max-width: 88px; font-size: 13px; }
   .title-wrap { min-width: 0; }
   .board-scroll { padding: 12px 12px 12px; }
   .tier-label .letter { font-size: 28px; }

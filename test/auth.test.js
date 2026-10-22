@@ -87,6 +87,14 @@ test("subscribers sign in with Every and can create; nobody else can", async () 
   const mine = await (await fetch(`${base}/api/me`, { headers: { cookie } })).json();
   assert.deepEqual(mine.collections.map((c) => c.title), ["Mine"]);
 
+  // A board page knows who's signed in, for the name in its nav that links back to these collections.
+  const boot = async (headers) => {
+    const page = await (await fetch(new URL(mine.collections[0].owner_url).pathname.replace(/^/, base), { headers })).text();
+    return JSON.parse(page.match(/<script id="boot" type="application\/json">(.*?)<\/script>/)[1]);
+  };
+  assert.equal((await boot({ cookie })).me, "Kieran");
+  assert.equal((await boot({})).me, null);
+
   const free = await signIn("free");
   assert.equal((await post("/api/collections", { title: "Free" }, { cookie: free.cookie })).status, 403);
   assert.equal((await post("/api/me/agent-keys", { name: "x" }, { cookie: free.cookie })).status, 403);

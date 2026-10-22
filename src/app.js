@@ -85,6 +85,8 @@ export function createApp({
   checkConfig({ every, createKey, publicUrl, allowOpen, hosted });
   const store = openStore(dataDir);
   const auth = createAuth({ store, every, createKey, publicUrl });
+  // Who's signed in, for the name in a board page's nav that links back to their collections.
+  const signedInName = (req) => (auth.mode === "every" && auth.currentUser(req)?.name) || null;
   if (seedExamples) ensureExamples(store, (line) => console.log(line));
 
   // collection id -> open event streams
@@ -335,7 +337,7 @@ export function createApp({
         const as = wants(req, url);
         if (as === "json") return json(res, 200, view);
         if (as === "md") return markdown(res, ownerBrief(base, view));
-        return html(res, 200, boardPage({ title: c.title, boot: { role: "owner", token: m[1] }, brief: ownerBrief(base, view) }));
+        return html(res, 200, boardPage({ title: c.title, boot: { role: "owner", token: m[1], me: signedInName(req) }, brief: ownerBrief(base, view) }));
       }
       if ((m = path.match(/^\/r\/([0-9a-z]+)$/))) {
         const r = store.raterByToken(m[1]);
@@ -345,7 +347,7 @@ export function createApp({
         if (as === "json") return json(res, 200, view);
         const brief = raterBrief(base, view, service.raterBoard(r, base));
         if (as === "md") return markdown(res, brief);
-        return html(res, 200, boardPage({ title: view.collection.title, boot: { role: "rater", token: m[1] }, brief }));
+        return html(res, 200, boardPage({ title: view.collection.title, boot: { role: "rater", token: m[1], me: signedInName(req) }, brief }));
       }
       if ((m = path.match(/^\/j\/([0-9a-z]+)$/))) {
         const c = store.collectionByInvite(m[1]);

@@ -152,6 +152,25 @@ test("personal links only see others when the owner allows it", async () => {
   assert.equal(view.placements.length, 0);
 });
 
+test("personal links export what their page shows", async () => {
+  const { api, kieran, dan } = await setup();
+  await call("POST", `/api/r/${kieran}/place`, { item_id: 1, tier: "S" });
+  await call("POST", `/api/r/${dan}/place`, { item_id: 1, tier: "B" });
+  let res = await call("GET", `/api/r/${kieran}/results.csv`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-disposition"), /attachment; filename="Intros\.csv"/);
+  assert.match(res.body.split("\n")[0], /^rank,title,average,Kieran,Dan$/);
+  assert.match(res.body, /\n1,Hook one,3,4,2\n/);
+  assert.doesNotMatch(res.body, /one\.md|two\.txt/, "raters never see file names");
+  // With others hidden, a person's export has only their own grades.
+  await call("PATCH", api, { show_others: false });
+  res = await call("GET", `/api/r/${dan}/results.csv`);
+  assert.match(res.body.split("\n")[0], /^rank,title,average,Dan$/);
+  assert.match(res.body, /\n1,Hook one,2,2\n/);
+  assert.doesNotMatch(res.body, /Kieran/);
+  assert.equal((await call("GET", "/api/r/nope/results.csv")).status, 404);
+});
+
 test("open link joins with a name", async () => {
   const { made } = await setup();
   const code = pathOf(made.join_url).split("/").pop();

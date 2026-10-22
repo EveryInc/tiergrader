@@ -103,6 +103,10 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
 .chip .dot.partial { background: var(--sky); box-shadow: inset 0 0 0 1px var(--ink-2); }
 .chip .dot.none { background: transparent; box-shadow: inset 0 0 0 1px var(--line-3); }
+.chip { position: relative; }
+.chip .mix { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; display: flex; }
+.people-sum { flex: none; display: grid; gap: 1px; padding: 0 8px 0 2px; color: var(--muted); font: 10.5px/1.25 var(--mono); white-space: nowrap; cursor: default; }
+.people-sum b { color: var(--ink); font-weight: 500; }
 
 /* ---------- board ---------- */
 .workspace { display: grid; min-height: 0; }

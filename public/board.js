@@ -19,6 +19,7 @@ const state = {
   viewing: null, // a rater id, or "everyone"
   table: false,
   selected: null,
+  lastSelected: null, // the card selected before a deselect, so the arrow keys pick up where you left off
   preview: false,
   undo: [],
   dragging: false,
@@ -111,7 +112,8 @@ function results() {
   return computeResults(items(), people(), state.data.placements);
 }
 
-// The board on screen: one person's, or everyone's average (each card in the tier nearest its average).
+// The board on screen: one person's, or everyone's average (each card in the tier nearest its average,
+// and within a tier left to right by rank, since results come best first).
 function currentView() {
   if (state.viewing !== "everyone") return { lists: boardOf(state.viewing), extra: null };
   const res = results();
@@ -215,7 +217,7 @@ function place(moves, { animate = true, record = true, advanceFrom = null } = {}
   if (state.preview && moves.length === 1) {
     const it = byId.get(moves[0].item_id);
     const where = moves[0].tier === UNSORTED ? "Unranked" : `${moves[0].tier} tier`;
-    toast(advanceFrom && !next ? `#${it.n} → ${where}. That's everything ranked.` : `#${it.n} ${it.title} → ${where}`);
+    toast(advanceFrom && !next ? `${it.title} → ${where}. That's everything ranked.` : `${it.title} → ${where}`);
   }
   save(moves);
   return true;
@@ -408,7 +410,7 @@ function cardHtml(id, extra) {
   }
   const img = it.kind === "image" ? `<img src="${fileUrl(it)}" alt="" loading="lazy" draggable="false">` : "";
   const snip = it.kind !== "image" && it.snippet ? `<span class="snip">${esc(it.snippet)}</span>` : "";
-  return `<div class="${classes.join(" ")}" data-id="${id}" role="button" tabindex="-1" aria-label="#${it.n} ${esc(it.title)}" title="${esc(it.title)}">${img}<span class="num">#${it.n}</span><span class="kind">${KIND_LABEL[it.kind] || ""}</span><span class="title">${esc(it.title)}</span>${snip}${votes}${avg}</div>`;
+  return `<div class="${classes.join(" ")}" data-id="${id}" role="button" tabindex="-1" aria-label="${esc(it.title)}" title="${esc(it.title)}">${img}<span class="kind">${KIND_LABEL[it.kind] || ""}</span><span class="title">${esc(it.title)}</span>${snip}${votes}${avg}</div>`;
 }
 
 function renderBoard() {
@@ -542,6 +544,7 @@ function flashTier(tier) {
 // ---------- selection & reader ----------
 
 function select(id, { open, scroll = true } = {}) {
+  if (!id && state.selected) state.lastSelected = state.selected;
   state.selected = id;
   if (open !== undefined) state.preview = open;
   for (const el of boardScroll.querySelectorAll(".card.selected")) el.classList.remove("selected");
@@ -557,7 +560,7 @@ function select(id, { open, scroll = true } = {}) {
 function step(delta) {
   const list = items();
   if (!list.length) return;
-  const i = list.findIndex((it) => it.id === state.selected);
+  const i = list.findIndex((it) => it.id === (state.selected ?? state.lastSelected));
   const next = i === -1 ? (delta > 0 ? 0 : list.length - 1) : (i + delta + list.length) % list.length;
   select(list[next].id);
 }
@@ -912,7 +915,7 @@ function openHelp() {
       <dt><kbd>Enter</kbd></dt><dd>Open or close the reader</dd>
       <dt><kbd>Space</kbd></dt><dd>Scroll the reader</dd>
       <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>Undo</dd>
-      <dt><kbd>Esc</kbd></dt><dd>Close the reader</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Close the reader and let go of the card</dd>
     </dl>
     <p style="margin:0;color:var(--muted);font-size:12.5px">After you place a card, the next unranked one opens, so you can read, press a key, read, press a key.</p>`,
   );
@@ -939,7 +942,11 @@ app.addEventListener("click", (e) => {
   const copyBtn = t.closest("[data-copy]");
   if (copyBtn) return copy(copyBtn.dataset.copy, "Link copied");
   const act = t.closest("[data-act]")?.dataset.act;
-  if (!act) return;
+  if (!act) {
+    // A click on empty space lets go of the selected card, so screenshots of the board come out clean.
+    if (state.selected && !state.preview && !t.closest("button, a, input, select, textarea, label, [contenteditable]")) select(null, { scroll: false });
+    return;
+  }
   if (act === "share") openShare();
   else if (act === "agent") openAgent();
   else if (act === "help") openHelp();
@@ -950,7 +957,7 @@ app.addEventListener("click", (e) => {
     syncUrl();
   } else if (act === "prev") step(-1);
   else if (act === "next") step(1);
-  else if (act === "close") select(state.selected, { open: false });
+  else if (act === "close") select(null, { open: false });
   else if (act === "remove-item") removeItem(state.selected);
 });
 
@@ -1001,8 +1008,7 @@ document.addEventListener("keydown", (e) => {
   if (key === "?") return openHelp();
   if (key === "Escape") {
     if (state.tierTip) return setTierTip(null);
-    if (state.preview) select(state.selected, { open: false, scroll: false });
-    else select(null);
+    select(null, { open: false, scroll: false });
     return;
   }
   if (key === "ArrowRight" || key === "j") {
@@ -1114,7 +1120,7 @@ const controller = {
       viewing,
       editable: editable(),
       scoring: POINTS,
-      tiers: Object.fromEntries(TIER_IDS.map((t) => [t, lists[t].map((id) => (extra ? { ...brief(id), average: extra.get(id).avg } : brief(id)))])),
+      tiers: Object.fromEntries(TIER_IDS.map((t) => [t, lists[t].map((id) => (extra ? { ...brief(id), rank: extra.get(id).rank, average: extra.get(id).avg } : brief(id)))])),
       unranked: lists[UNSORTED].map(brief),
       people: state.data.raters.map((r) => ({ name: r.name, ranked: rankedCount(r.id), total: items().length })),
     };

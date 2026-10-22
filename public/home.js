@@ -40,7 +40,7 @@ const signinError = SIGNIN_ERRORS[new URLSearchParams(location.search).get("sign
 const account = !EVERY
   ? ""
   : user
-    ? `<form method="post" action="/auth/logout" class="account"><span>${esc(user.name)}</span><button class="btn small ghost">Sign out</button></form>`
+    ? `<form method="post" action="/auth/logout" class="account"><a class="me" href="#collections" title="Your collections">${esc(user.name)}</a><button class="btn small ghost">Sign out</button></form>`
     : `<a class="btn small" href="/auth/every?return_to=/">Sign in with Every</a>`;
 
 const createForm = `
@@ -89,7 +89,7 @@ main.innerHTML = `
   </section>
 
   ${examplesHtml()}
-  <div data-owned></div>
+  <div data-owned id="collections"></div>
   ${rated.length ? `<div class="section-title">Rankings you're part of</div><div class="link-list">${rated.map((x) => `<a href="${esc(x.url)}"><span>${esc(x.title)}</span><small>as ${esc(x.name)} · ${ago(x.at)}</small></a>`).join("")}</div>` : ""}
 
   <footer class="home-foot">tiergrader is <a href="${REPO}">open source</a> (MIT)${EVERY ? ` · An <a href="https://every.to">Every</a> experiment` : ""}</footer>`;
@@ -131,7 +131,11 @@ async function renderOwned() {
   }
   el.innerHTML = list.length
     ? `<div class="section-title">Your collections</div><div class="link-list">${list.map((x) => `<a href="${esc(x.url)}"><span>${esc(x.title)}</span><small>${esc(x.meta)}</small></a>`).join("")}</div>`
-    : "";
+    : EVERY && user
+      ? `<div class="section-title">Your collections</div><p class="owned-empty">None yet. The ones you make show up here.</p>`
+      : "";
+  // The name in the nav links here; the list only exists once it has loaded.
+  if (location.hash === "#collections") el.scrollIntoView({ block: "start" });
 }
 
 // ---------- agent keys (Every sign-in only) ----------

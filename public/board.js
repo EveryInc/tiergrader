@@ -324,6 +324,7 @@ app.innerHTML = `
     <div class="title-wrap"></div>
     <nav class="people" aria-label="Whose ranking to show"></nav>
     <div class="topbar-actions"></div>
+    ${boot.me ? `<a class="me" href="/#collections" title="Your collections">${esc(boot.me)}</a>` : ""}
   </header>
   <main class="workspace">
     <div class="board-scroll"></div>

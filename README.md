@@ -29,6 +29,7 @@ No dependencies to install: Node 24+ (`node:sqlite`, `node:http`). The page load
 - **Each file is a card.** Click one to read it in a modal: just the title and the post, image, page or PDF, with the tier buttons underneath. Anything else downloads. Only raster images, PDF, audio and video are served as-is; everything else (HTML, SVG, text…) is served in a sandbox with no access to the app.
 - **Scoring:** S 4 · A 3 · B 2 · C 1 · D 0 · F −1. Unplaced cards don't count. The "Everyone" view puts each card in the tier nearest its average (ties round up) and shows each person's vote on it; "Table" lists them all.
 - **Live:** open pages update as people rank, files are added, or links are made.
+- **Every view has its own link.** The address bar follows what's on screen, so you can share or bookmark it, and Back and Forward retrace it: `?view=lauren` (one person's ranking, by name), `?view=everyone` (the average; add `&table=1` for the table), and `&card=<id>` with the reader open on that card. A link with none of these opens your own ranking, as before.
 - People can see each other's rankings by default; the owner can turn that off in Share.
 - **Examples:** three example tier grades are seeded at startup (`public/examples.js`, also acted out by the landing-page demo). `/try/<slug>` gives each visitor a private guest ranking next to Dan's and Kate's; guests never see each other, and are cleared after two weeks.
 - Raters never see file names, so for a blind comparison give the cards neutral titles ("Post A").
@@ -101,6 +102,7 @@ src/auth.js          Every sign-in, sessions, agent keys and agents' key request
 src/agent-docs.js    llms.txt and the per-page agent briefs
 src/pages.js         HTML shells
 public/board.js      the tier board (owner and personal pages)
+public/view-url.js   which view a page's link names (?view=, &table=, &card=)
 public/agent.js      WebMCP tools and window.tiergrader
 public/shared.js     tier scale and averaging (server and browser)
 public/home.js       sign in, create a collection, agent keys

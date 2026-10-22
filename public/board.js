@@ -2,6 +2,7 @@
 // personal pages (/r/...) are one person's editable ranking.
 import { TIERS, UNSORTED, LOCKUP_HTML, agentPrompt, computeResults, normalizeTier } from "./shared.js";
 import { registerAgentTools } from "./agent.js";
+import { readView, writeView } from "./view-url.js";
 
 const boot = JSON.parse(document.getElementById("boot").textContent);
 const OWNER = boot.role === "owner";
@@ -238,8 +239,10 @@ function nextUnsorted(fromId) {
 // ---------- loading & live updates ----------
 
 function applyData(data) {
+  const first = !state.data;
   state.data = data;
   byId = new Map(data.items.map((it) => [it.id, it]));
+  if (first) showUrlView();
   const valid = (v) => v === "everyone" || v === data.me.id || data.raters.some((r) => r.id === v);
   if (!state.viewing || !valid(state.viewing)) state.viewing = data.me.id;
   if (state.viewing === "everyone" && !others().length) state.viewing = data.me.id;
@@ -248,6 +251,7 @@ function applyData(data) {
     state.preview = false;
   }
   render();
+  syncUrl({ replace: true });
 }
 
 // Refetch the page's data (debounced). Every caller in the same window shares one promise. A fetch that
@@ -547,6 +551,7 @@ function select(id, { open, scroll = true } = {}) {
     if (scroll) el.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   renderPreview();
+  syncUrl();
 }
 
 function step(delta) {
@@ -668,6 +673,38 @@ function setViewing(view) {
   state.viewing = view;
   if (view !== "everyone") state.table = false;
   render();
+  syncUrl();
+}
+
+// The address bar always names what's on screen (whose ranking, the table, the open card), so the link
+// can be shared or bookmarked. Switching views or opening and closing the reader adds a history entry,
+// so Back undoes it; stepping between cards in the reader, or a refresh, just updates the link.
+const urlContext = () => ({ people: people(), meId: me().id, items: items() });
+let shown = null; // the view last written to the address bar
+
+function syncUrl({ replace = false } = {}) {
+  const now = { viewing: state.viewing, table: state.viewing === "everyone" && state.table, card: state.preview ? state.selected : null };
+  const search = writeView(location.search, now, urlContext());
+  const changed = shown && (now.viewing !== shown.viewing || now.table !== shown.table || !now.card !== !shown.card);
+  shown = now;
+  if (search === location.search) return;
+  history[changed && !replace ? "pushState" : "replaceState"](null, "", location.pathname + search + location.hash);
+}
+
+function showUrlView() {
+  const { viewing, table, card } = readView(location.search, urlContext());
+  Object.assign(state, { viewing, table, selected: card, preview: Boolean(card) });
+}
+
+window.addEventListener("popstate", () => {
+  if (!state.data) return;
+  showUrlView();
+  applyData(state.data);
+  scrollToSelected();
+});
+
+function scrollToSelected() {
+  if (state.selected) boardScroll.querySelector(`.card[data-id="${state.selected}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 // ---------- owner actions ----------
@@ -910,6 +947,7 @@ app.addEventListener("click", (e) => {
   else if (act === "table") {
     state.table = !state.table;
     render();
+    syncUrl();
   } else if (act === "prev") step(-1);
   else if (act === "next") step(1);
   else if (act === "close") select(state.selected, { open: false });
@@ -1159,6 +1197,7 @@ const controller = {
     return;
   }
   app.removeAttribute("aria-busy");
+  scrollToSelected();
   const c = state.data.collection;
   const url = location.origin + location.pathname;
   if (OWNER) remember("tg.owned", { url, title: c.title, at: Date.now() });

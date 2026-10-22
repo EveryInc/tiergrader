@@ -97,8 +97,9 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 }
 .chip small { color: var(--muted); font: 11px var(--mono); }
 .chip:hover { border-color: var(--ink); }
-.chip[aria-pressed="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
-.chip[aria-pressed="true"] small { color: var(--sky); }
+/* Sky, like a selected card, so the person you're viewing never reads as the black New/Share buttons. */
+.chip[aria-pressed="true"] { background: var(--sky); color: var(--ink); border-color: var(--ink); }
+.chip[aria-pressed="true"] small { color: var(--ink-2); }
 .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
 .chip .dot.partial { background: var(--sky); box-shadow: inset 0 0 0 1px var(--ink-2); }
 .chip .dot.none { background: transparent; box-shadow: inset 0 0 0 1px var(--line-3); }
@@ -318,7 +319,7 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
 .demo-new { flex: none; font: 500 12px/1 var(--sans); padding: 6px 10px; background: var(--ink); color: var(--sky); }
 .demo-people { display: flex; gap: 4px; margin-bottom: 10px; }
 .demo-chip { font: 500 12px/1 var(--sans); padding: 6px 10px; border: 1px solid var(--line-2); background: var(--page); transition: background .2s, color .2s, border-color .2s; }
-.demo-chip.on { background: var(--ink); border-color: var(--ink); color: var(--page); }
+.demo-chip.on { background: var(--sky); border-color: var(--ink); color: var(--ink); }
 .demo-board { border: 1px solid var(--ink); background: var(--ink); display: grid; gap: 1px; }
 .demo-row { display: grid; grid-template-columns: 38px 1fr; height: 40px; background: var(--page); }
 .demo-row b { background: var(--tier); display: grid; place-items: center; font: 500 18px/1 var(--serif); }

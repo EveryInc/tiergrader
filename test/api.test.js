@@ -64,6 +64,40 @@ test("tier scale and averaging", () => {
   assert.deepEqual(res.raters.map((r) => r.ranked), [2, 1]);
 });
 
+test("rank and tier never disagree: a better-ranked item is never in a lower tier", () => {
+  const order = ["S", "A", "B", "C", "D", "F", "unsorted"];
+  const check = (res) => {
+    for (let i = 1; i < res.items.length; i++) {
+      const [prev, row] = [res.items[i - 1], res.items[i]];
+      assert.ok(order.indexOf(prev.tier) <= order.indexOf(row.tier), `#${prev.rank} is ${prev.tier} but #${row.rank} is ${row.tier}`);
+    }
+  };
+  // 100 A and 101 B average 2.4975, which shows as 2.5: it ties a 2.5 item and wins on count, so it must be in A too.
+  const raters = Array.from({ length: 201 }, (_, i) => ({ id: `r${i}`, name: `R${i}` }));
+  const res = computeResults(
+    [{ id: "x", n: 1, title: "X" }, { id: "y", n: 2, title: "Y" }],
+    raters,
+    [
+      ...raters.map((r, i) => ({ rater_id: r.id, item_id: "x", tier: i < 100 ? "A" : "B" })),
+      { rater_id: "r0", item_id: "y", tier: "A" },
+      { rater_id: "r1", item_id: "y", tier: "B" },
+    ],
+  );
+  assert.deepEqual(res.items.map((r) => [r.id, r.avg, r.tier, r.rank]), [["x", 2.5, "A", 1], ["y", 2.5, "A", 2]]);
+  check(res);
+
+  // Random boards: walking the results best first, the tiers only ever go down.
+  let seed = 7;
+  const rand = (n) => ((seed = (seed * 48271) % 2147483647) % n);
+  for (let round = 0; round < 50; round++) {
+    const items = Array.from({ length: 12 }, (_, i) => ({ id: `i${i}`, n: i + 1, title: `I${i}` }));
+    const people = Array.from({ length: 1 + rand(6) }, (_, i) => ({ id: `p${i}`, name: `P${i}` }));
+    const placements = [];
+    for (const p of people) for (const it of items) if (rand(5)) placements.push({ rater_id: p.id, item_id: it.id, tier: order[rand(6)] });
+    check(computeResults(items, people, placements));
+  }
+});
+
 test("create, upload, invite, rank, results", async () => {
   const { made, api, kieran, dan } = await setup();
   assert.match(made.owner_url, /\/o\/[0-9a-z]{24}$/);

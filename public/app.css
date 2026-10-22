@@ -155,6 +155,7 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 .card:hover { border-color: var(--ink); }
 .readonly .card { cursor: pointer; }
 .card .num { font: 500 9.5px/1 var(--mono); color: var(--muted); }
+.card:not(.is-image) .num.rank { color: var(--ink); font-weight: 600; }
 .card .kind { position: absolute; right: 7px; top: 5px; font: 500 9.5px/1 var(--mono); letter-spacing: .06em; color: var(--line-3); }
 .card .title { font: 600 12px/1.25 var(--sans); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; flex: none; }
 .card .snip {

@@ -19,6 +19,7 @@ const state = {
   viewing: null, // a rater id, or "everyone"
   table: false,
   selected: null,
+  lastSelected: null, // the card selected before a deselect, so the arrow keys pick up where you left off
   preview: false,
   undo: [],
   dragging: false,
@@ -38,6 +39,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", 
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 const fmtAvg = (v) => (v === null || v === undefined ? "–" : (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, ""));
 const fileUrl = (it) => `/f/${it.id}`;
+const ordinal = (n) => `${n}${[11, 12, 13].includes(n % 100) ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th"}`;
 
 function remember(key, entry) {
   try {
@@ -111,7 +113,8 @@ function results() {
   return computeResults(items(), people(), state.data.placements);
 }
 
-// The board on screen: one person's, or everyone's average (each card in the tier nearest its average).
+// The board on screen: one person's, or everyone's average (each card in the tier nearest its average,
+// and within a tier left to right by rank, since results come best first).
 function currentView() {
   if (state.viewing !== "everyone") return { lists: boardOf(state.viewing), extra: null };
   const res = results();
@@ -397,6 +400,13 @@ function cardHtml(id, extra) {
   if (state.selected === id) classes.push("selected");
   let votes = "";
   let avg = "";
+  // On everyone's board the corner shows the card's rank by average; elsewhere it shows the file's number.
+  let num = `<span class="num">#${it.n}</span>`;
+  let label = `#${it.n} ${esc(it.title)}`;
+  if (extra?.rank) {
+    num = `<span class="num rank" title="Ranked ${ordinal(extra.rank)} by average · file #${it.n}">${ordinal(extra.rank)}</span>`;
+    label = `${ordinal(extra.rank)}: ${esc(it.title)}`;
+  }
   if (extra) {
     const tiers = Object.values(extra.ratings).sort((a, b) => POINTS[b] - POINTS[a]);
     if (tiers.length) {
@@ -408,7 +418,7 @@ function cardHtml(id, extra) {
   }
   const img = it.kind === "image" ? `<img src="${fileUrl(it)}" alt="" loading="lazy" draggable="false">` : "";
   const snip = it.kind !== "image" && it.snippet ? `<span class="snip">${esc(it.snippet)}</span>` : "";
-  return `<div class="${classes.join(" ")}" data-id="${id}" role="button" tabindex="-1" aria-label="#${it.n} ${esc(it.title)}" title="${esc(it.title)}">${img}<span class="num">#${it.n}</span><span class="kind">${KIND_LABEL[it.kind] || ""}</span><span class="title">${esc(it.title)}</span>${snip}${votes}${avg}</div>`;
+  return `<div class="${classes.join(" ")}" data-id="${id}" role="button" tabindex="-1" aria-label="${label}" title="${esc(it.title)}">${img}${num}<span class="kind">${KIND_LABEL[it.kind] || ""}</span><span class="title">${esc(it.title)}</span>${snip}${votes}${avg}</div>`;
 }
 
 function renderBoard() {
@@ -542,6 +552,7 @@ function flashTier(tier) {
 // ---------- selection & reader ----------
 
 function select(id, { open, scroll = true } = {}) {
+  if (!id && state.selected) state.lastSelected = state.selected;
   state.selected = id;
   if (open !== undefined) state.preview = open;
   for (const el of boardScroll.querySelectorAll(".card.selected")) el.classList.remove("selected");
@@ -557,7 +568,7 @@ function select(id, { open, scroll = true } = {}) {
 function step(delta) {
   const list = items();
   if (!list.length) return;
-  const i = list.findIndex((it) => it.id === state.selected);
+  const i = list.findIndex((it) => it.id === (state.selected ?? state.lastSelected));
   const next = i === -1 ? (delta > 0 ? 0 : list.length - 1) : (i + delta + list.length) % list.length;
   select(list[next].id);
 }
@@ -606,7 +617,7 @@ function ratingsLine(it) {
     .sort((a, b) => POINTS[b[1]] - POINTS[a[1]])
     .map(([rid, t]) => `<span class="who">${pill(t)} ${esc(raterName(rid))}</span>`)
     .join("");
-  return `<span>Average <strong style="color:var(--ink)">${fmtAvg(row.avg)}</strong> (${row.tier})</span>${people}`;
+  return `<span>Ranked <strong style="color:var(--ink)">${ordinal(row.rank)}</strong> · average <strong style="color:var(--ink)">${fmtAvg(row.avg)}</strong> (${row.tier})</span>${people}`;
 }
 
 async function renderPreviewBody(it) {
@@ -912,7 +923,7 @@ function openHelp() {
       <dt><kbd>Enter</kbd></dt><dd>Open or close the reader</dd>
       <dt><kbd>Space</kbd></dt><dd>Scroll the reader</dd>
       <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>Undo</dd>
-      <dt><kbd>Esc</kbd></dt><dd>Close the reader</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Close the reader and let go of the card</dd>
     </dl>
     <p style="margin:0;color:var(--muted);font-size:12.5px">After you place a card, the next unranked one opens, so you can read, press a key, read, press a key.</p>`,
   );
@@ -939,7 +950,11 @@ app.addEventListener("click", (e) => {
   const copyBtn = t.closest("[data-copy]");
   if (copyBtn) return copy(copyBtn.dataset.copy, "Link copied");
   const act = t.closest("[data-act]")?.dataset.act;
-  if (!act) return;
+  if (!act) {
+    // A click on empty space lets go of the selected card, so screenshots of the board come out clean.
+    if (state.selected && !state.preview && !t.closest("button, a, input, select, textarea, label, [contenteditable]")) select(null, { scroll: false });
+    return;
+  }
   if (act === "share") openShare();
   else if (act === "agent") openAgent();
   else if (act === "help") openHelp();
@@ -950,7 +965,7 @@ app.addEventListener("click", (e) => {
     syncUrl();
   } else if (act === "prev") step(-1);
   else if (act === "next") step(1);
-  else if (act === "close") select(state.selected, { open: false });
+  else if (act === "close") select(null, { open: false });
   else if (act === "remove-item") removeItem(state.selected);
 });
 
@@ -1001,8 +1016,7 @@ document.addEventListener("keydown", (e) => {
   if (key === "?") return openHelp();
   if (key === "Escape") {
     if (state.tierTip) return setTierTip(null);
-    if (state.preview) select(state.selected, { open: false, scroll: false });
-    else select(null);
+    select(null, { open: false, scroll: false });
     return;
   }
   if (key === "ArrowRight" || key === "j") {
@@ -1114,7 +1128,7 @@ const controller = {
       viewing,
       editable: editable(),
       scoring: POINTS,
-      tiers: Object.fromEntries(TIER_IDS.map((t) => [t, lists[t].map((id) => (extra ? { ...brief(id), average: extra.get(id).avg } : brief(id)))])),
+      tiers: Object.fromEntries(TIER_IDS.map((t) => [t, lists[t].map((id) => (extra ? { ...brief(id), rank: extra.get(id).rank, average: extra.get(id).avg } : brief(id)))])),
       unranked: lists[UNSORTED].map(brief),
       people: state.data.raters.map((r) => ({ name: r.name, ranked: rankedCount(r.id), total: items().length })),
     };

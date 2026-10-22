@@ -66,7 +66,8 @@ export function tierForScore(avg) {
 }
 
 // items: [{id, n, title}], raters: [{id, name}], placements: [{rater_id, item_id, tier, position}]
-// Returns per-item averages (ranked best first) and per-rater progress.
+// Returns per-item averages (ranked best first) and per-rater progress. Ties on average go to the item more
+// people rated, then to the earlier file.
 export function computeResults(items, raters, placements) {
   const byItem = new Map(items.map((it) => [it.id, {}]));
   const rankedCount = new Map(raters.map((r) => [r.id, 0]));
@@ -79,12 +80,14 @@ export function computeResults(items, raters, placements) {
     const ratings = byItem.get(it.id);
     const tiers = Object.values(ratings);
     const count = tiers.length;
-    const avg = count ? tiers.reduce((s, t) => s + POINTS[t], 0) / count : null;
+    const sum = tiers.reduce((s, t) => s + POINTS[t], 0);
+    // Rank and tier both come from this one rounded number, so a higher-ranked item is never in a lower tier.
+    const avg = count ? Math.round((sum / count) * 100) / 100 : null;
     return {
       id: it.id,
       n: it.n,
       title: it.title,
-      avg: avg === null ? null : Math.round(avg * 100) / 100,
+      avg,
       count,
       tier: avg === null ? UNSORTED : tierForScore(avg),
       ratings,

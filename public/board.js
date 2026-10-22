@@ -1,6 +1,6 @@
 // The tier board: owner pages (/o/...) show everyone's rankings and manage the collection;
 // personal pages (/r/...) are one person's editable ranking.
-import { TIERS, UNSORTED, LOCKUP_HTML, agentPrompt, computeResults, normalizeTier } from "./shared.js";
+import { TIERS, UNSORTED, LOCKUP_HTML, agentPrompt, computeResults, normalizeTier, ratingStats } from "./shared.js";
 import { registerAgentTools } from "./agent.js";
 import { readView, writeView } from "./view-url.js";
 
@@ -375,20 +375,41 @@ function renderActions() {
     ${OWNER ? `<button class="btn primary" data-act="share">Share</button>` : ""}`;
 }
 
-function chip(view, name, meta, dot = "") {
-  return `<button class="chip" data-view="${esc(view)}" aria-pressed="${state.viewing === view}">${dot ? `<span class="dot ${dot}"></span>` : ""}${esc(name)}${meta ? ` <small>${esc(meta)}</small>` : ""}</button>`;
+function chip(view, name, meta, dot = "", { title = "", mix = "" } = {}) {
+  return `<button class="chip" data-view="${esc(view)}" aria-pressed="${state.viewing === view}"${title ? ` title="${esc(title)}"` : ""}>${dot ? `<span class="dot ${dot}"></span>` : ""}${esc(name)}${meta ? ` <small>${esc(meta)}</small>` : ""}${mix}</button>`;
 }
 
-// Whose ranking is on screen: you, each other person, or everyone's average. Lives in the top nav.
+// A person's tiers as words ("S 2 · A 3 · C 1"), and as a thin bar of tier colours along the chip's bottom edge.
+const tierWords = (tiers) => TIERS.filter((t) => tiers[t.id]).map((t) => `${t.id} ${tiers[t.id]}`).join(" · ");
+function tierMix(tiers) {
+  const n = Object.values(tiers).reduce((s, x) => s + x, 0);
+  if (!n) return "";
+  const parts = TIERS.filter((t) => tiers[t.id]).map((t) => `<i style="flex:${tiers[t.id]};background:${t.color}"></i>`);
+  return `<span class="mix" aria-hidden="true">${parts.join("")}</span>`;
+}
+
+// Whose ranking is on screen: you, each other person, or everyone's average. Lives in the top nav, after a
+// count of how many people have rated and how many ratings that makes. Hover a person for their tiers.
 function renderPeople() {
   const total = items().length;
   const dot = (n) => (n === 0 ? "none" : n < total ? "partial" : "done");
-  const mine = rankedCount(me().id);
-  const parts = [chip(me().id, "You", `${mine}/${total}`, dot(mine))];
-  for (const r of others()) {
-    const n = rankedCount(r.id);
-    parts.push(chip(r.id, r.name, `${n}/${total}`, dot(n)));
+  const stats = ratingStats(items(), people(), state.data.placements);
+  const person = (id, name) => {
+    const tiers = stats.byRater.get(id);
+    const n = stats.ranked.get(id);
+    const title = `${id === me().id ? "You" : name}: ${n} of ${plural(total, "item")} rated${n ? ` (${tierWords(tiers)})` : ""}`;
+    return chip(id, name, `${n}/${total}`, dot(n), { title, mix: tierMix(tiers) });
+  };
+  const parts = [];
+  if (others().length && total) {
+    // An owner who hasn't rated is running the grade, not grading, so they don't count as someone yet to rate.
+    const pool = OWNER && !stats.ranked.get(me().id) ? others() : people();
+    const sum = ratingStats(items(), pool, state.data.placements);
+    const title = `${sum.rated} of ${plural(sum.people, "person", "people")} have rated at least one item, ${plural(sum.ratings, "rating")} in all (out of ${sum.possible} possible)`;
+    parts.push(`<span class="people-sum" title="${esc(title)}"><b>${sum.rated} of ${sum.people} rated</b><span>${plural(sum.ratings, "rating")}</span></span>`);
   }
+  parts.push(person(me().id, "You"));
+  for (const r of others()) parts.push(person(r.id, r.name));
   if (others().length) parts.push(chip("everyone", "Everyone", "avg"));
   if (state.viewing === "everyone" && total) parts.push(`<button class="chip" data-act="table" aria-pressed="${state.table}">Table</button>`);
   peopleNav.innerHTML = parts.join("");

@@ -101,3 +101,19 @@ export function computeResults(items, raters, placements) {
     raters: raters.map((r) => ({ id: r.id, name: r.name, ranked: rankedCount.get(r.id), total: items.length })),
   };
 }
+
+// For the top nav: how many people have rated anything, how many ratings that makes in all, and each
+// person's count per tier (byRater) and in all (ranked). Only placements in a tier, on an item that still exists, count.
+export function ratingStats(items, raters, placements) {
+  const itemIds = new Set(items.map((it) => it.id));
+  const byRater = new Map(raters.map((r) => [r.id, Object.fromEntries(TIERS.map((t) => [t.id, 0]))]));
+  let ratings = 0;
+  for (const p of placements) {
+    if (!itemIds.has(p.item_id) || !byRater.has(p.rater_id) || !isTier(p.tier)) continue;
+    byRater.get(p.rater_id)[p.tier]++;
+    ratings++;
+  }
+  const ranked = new Map([...byRater].map(([id, tiers]) => [id, Object.values(tiers).reduce((s, n) => s + n, 0)]));
+  const rated = [...ranked.values()].filter((n) => n > 0).length;
+  return { people: raters.length, rated, ratings, possible: raters.length * items.length, byRater, ranked };
+}

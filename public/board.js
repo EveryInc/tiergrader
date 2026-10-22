@@ -472,7 +472,7 @@ function tableHtml() {
   const rows = res.items
     .map((row) => `<tr>
       <td class="num-cell">${row.rank ?? "–"}</td>
-      <td class="title-cell" data-open="${row.id}"><span class="num-cell">#${row.n}</span> ${esc(row.title)}</td>
+      <td class="title-cell" data-open="${row.id}">${esc(row.title)}</td>
       <td class="num-cell">${fmtAvg(row.avg)}</td>
       <td>${row.avg === null ? pill() : pill(row.tier)}</td>
       ${raters.map((r) => `<td>${pill(row.ratings[r.id])}</td>`).join("")}

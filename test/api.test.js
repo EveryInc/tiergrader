@@ -158,6 +158,19 @@ test("pages: links, agent brief, content negotiation, bad tokens", async () => {
   assert.match(llms.body, /# tiergrader/);
 });
 
+test("links to a view (a person, everyone, a card) open the same page", async () => {
+  const { made, kieran } = await setup();
+  const owner = pathOf(made.owner_url);
+  for (const path of [`${owner}?view=kieran`, `${owner}?view=everyone&table=1&card=abc`, `/r/${kieran}?view=dan&card=2`]) {
+    const page = await call("GET", path, undefined, { accept: "text/html" });
+    assert.equal(page.status, 200, path);
+    assert.match(page.body, /\/static\/board\.js/);
+  }
+  const script = await call("GET", "/static/view-url.js");
+  assert.equal(script.status, 200);
+  assert.match(script.headers.get("content-type"), /javascript/);
+});
+
 test("uploaded HTML is served sandboxed", async () => {
   const { api } = await setup();
   const { added } = (await call("POST", `${api}/items`, { items: [{ filename: "page.html", text: "<title>Hi</title><script>alert(1)</script>" }] })).body;

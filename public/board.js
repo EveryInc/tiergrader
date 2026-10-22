@@ -474,13 +474,13 @@ function tableHtml() {
       <td class="num-cell">${row.rank ?? "–"}</td>
       <td class="title-cell" data-open="${row.id}">${esc(row.title)}</td>
       <td class="num-cell">${fmtAvg(row.avg)}</td>
+      <td class="num-cell">${row.count}</td>
       <td>${row.avg === null ? pill() : pill(row.tier)}</td>
       ${raters.map((r) => `<td>${pill(row.ratings[r.id])}</td>`).join("")}
-      <td class="num-cell">${row.count}</td>
     </tr>`)
     .join("");
   return `<div class="table-wrap"><table class="results-table">
-    <thead><tr><th>Rank</th><th>Item</th><th>Avg</th><th>Tier</th>${raters.map((r) => `<th>${r.id === me().id ? "You" : esc(r.name)}</th>`).join("")}<th>Ratings</th></tr></thead>
+    <thead><tr><th>Rank</th><th>Item</th><th>Avg</th><th>Ratings</th><th>Tier</th>${raters.map((r) => `<th>${r.id === me().id ? "You" : esc(r.name)}</th>`).join("")}</tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 

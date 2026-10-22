@@ -368,10 +368,10 @@ function renderTitle() {
 
 function renderActions() {
   actions.innerHTML = `
-    ${OWNER ? "" : `<a class="btn primary" href="/#create" data-act="new" title="Make your own tier grade">+ New</a>`}
     ${OWNER ? `<a class="btn hide-sm" href="${API}/results.csv" download title="Download a CSV of every file and everyone's grades, in points">Export</a>` : ""}
     <button class="btn hide-sm" data-act="help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
     <button class="btn" data-act="agent" title="Use it with your agent">Agent</button>
+    ${OWNER ? "" : `<a class="btn primary" href="/#create" data-act="new" title="Make your own tier grade">+ New</a>`}
     ${OWNER ? `<button class="btn primary" data-act="share">Share</button>` : ""}`;
 }
 

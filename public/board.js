@@ -368,7 +368,7 @@ function renderTitle() {
 
 function renderActions() {
   actions.innerHTML = `
-    ${OWNER ? "" : `<a class="btn primary" href="/#create" title="Make your own tier grade">+ New</a>`}
+    ${OWNER ? "" : `<a class="btn primary" href="/#create" data-act="new" title="Make your own tier grade">+ New</a>`}
     ${OWNER ? `<a class="btn hide-sm" href="${API}/results.csv" download title="Download a CSV of every file and everyone's grades, in points">Export</a>` : ""}
     <button class="btn hide-sm" data-act="help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
     <button class="btn" data-act="agent" title="Use it with your agent">Agent</button>
@@ -728,6 +728,22 @@ async function saveEdit(el) {
   }
 }
 
+// "+ New" makes an empty collection and opens its owner page, where the files go in. When this visitor
+// can't create here (not signed in, not a subscriber, a password server), the home page's form handles it.
+let creating = false;
+async function newCollection() {
+  if (creating) return;
+  creating = true;
+  const title = `Tier grade · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  try {
+    const res = await fetch("/api/collections", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title }) });
+    const made = res.ok ? await res.json() : null;
+    location.href = made?.owner_url ? new URL(made.owner_url).pathname : "/#create";
+  } catch {
+    location.href = "/#create";
+  }
+}
+
 function pickFiles() {
   const input = Object.assign(document.createElement("input"), { type: "file", multiple: true });
   input.onchange = () => uploadFiles(input.files);
@@ -997,7 +1013,12 @@ app.addEventListener("click", (e) => {
     if (state.selected && !state.preview && !t.closest("button, a, input, select, textarea, label, [contenteditable]")) select(null, { scroll: false });
     return;
   }
-  if (act === "share") openShare();
+  if (act === "new") {
+    // A plain link is the fallback (and what a cmd-click opens): the home page's create form.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    newCollection();
+  } else if (act === "share") openShare();
   else if (act === "agent") openAgent();
   else if (act === "help") openHelp();
   else if (act === "add-files") pickFiles();

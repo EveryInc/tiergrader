@@ -39,7 +39,6 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", 
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 const fmtAvg = (v) => (v === null || v === undefined ? "–" : (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, ""));
 const fileUrl = (it) => `/f/${it.id}`;
-const ordinal = (n) => `${n}${[11, 12, 13].includes(n % 100) ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th"}`;
 
 function remember(key, entry) {
   try {
@@ -218,7 +217,7 @@ function place(moves, { animate = true, record = true, advanceFrom = null } = {}
   if (state.preview && moves.length === 1) {
     const it = byId.get(moves[0].item_id);
     const where = moves[0].tier === UNSORTED ? "Unranked" : `${moves[0].tier} tier`;
-    toast(advanceFrom && !next ? `#${it.n} → ${where}. That's everything ranked.` : `#${it.n} ${it.title} → ${where}`);
+    toast(advanceFrom && !next ? `${it.title} → ${where}. That's everything ranked.` : `${it.title} → ${where}`);
   }
   save(moves);
   return true;
@@ -400,13 +399,6 @@ function cardHtml(id, extra) {
   if (state.selected === id) classes.push("selected");
   let votes = "";
   let avg = "";
-  // On everyone's board the corner shows the card's rank by average; elsewhere it shows the file's number.
-  let num = `<span class="num">#${it.n}</span>`;
-  let label = `#${it.n} ${esc(it.title)}`;
-  if (extra?.rank) {
-    num = `<span class="num rank" title="Ranked ${ordinal(extra.rank)} by average · file #${it.n}">${ordinal(extra.rank)}</span>`;
-    label = `${ordinal(extra.rank)}: ${esc(it.title)}`;
-  }
   if (extra) {
     const tiers = Object.values(extra.ratings).sort((a, b) => POINTS[b] - POINTS[a]);
     if (tiers.length) {
@@ -418,7 +410,7 @@ function cardHtml(id, extra) {
   }
   const img = it.kind === "image" ? `<img src="${fileUrl(it)}" alt="" loading="lazy" draggable="false">` : "";
   const snip = it.kind !== "image" && it.snippet ? `<span class="snip">${esc(it.snippet)}</span>` : "";
-  return `<div class="${classes.join(" ")}" data-id="${id}" role="button" tabindex="-1" aria-label="${label}" title="${esc(it.title)}">${img}${num}<span class="kind">${KIND_LABEL[it.kind] || ""}</span><span class="title">${esc(it.title)}</span>${snip}${votes}${avg}</div>`;
+  return `<div class="${classes.join(" ")}" data-id="${id}" role="button" tabindex="-1" aria-label="${esc(it.title)}" title="${esc(it.title)}">${img}<span class="kind">${KIND_LABEL[it.kind] || ""}</span><span class="title">${esc(it.title)}</span>${snip}${votes}${avg}</div>`;
 }
 
 function renderBoard() {
@@ -617,7 +609,7 @@ function ratingsLine(it) {
     .sort((a, b) => POINTS[b[1]] - POINTS[a[1]])
     .map(([rid, t]) => `<span class="who">${pill(t)} ${esc(raterName(rid))}</span>`)
     .join("");
-  return `<span>Ranked <strong style="color:var(--ink)">${ordinal(row.rank)}</strong> · average <strong style="color:var(--ink)">${fmtAvg(row.avg)}</strong> (${row.tier})</span>${people}`;
+  return `<span>Average <strong style="color:var(--ink)">${fmtAvg(row.avg)}</strong> (${row.tier})</span>${people}`;
 }
 
 async function renderPreviewBody(it) {

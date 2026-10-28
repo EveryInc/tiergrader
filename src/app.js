@@ -501,6 +501,12 @@ export function createApp({
         service.place(store.ownerRater(c), Array.isArray(body) ? body : body.moves ?? [body], source);
         return json(res, 200, service.ownerView(store.getCollection(c.id), base));
       }
+      if (sub === "/comment" && method === "POST") {
+        // The owner's own comments.
+        const body = await readJson(req);
+        service.comment(store.ownerRater(c), Array.isArray(body) ? body : body.comments ?? [body], source);
+        return json(res, 200, service.ownerView(store.getCollection(c.id), base));
+      }
       if (sub === "/items" && method === "POST") {
         const inputs = await readItemInputs(req, url);
         return json(res, 201, { added: service.addItems(c, inputs, base, source) });
@@ -550,6 +556,11 @@ export function createApp({
         const body = await readJson(req);
         const moves = Array.isArray(body) ? body : body.moves ?? [body];
         service.place(r, moves, source);
+        return json(res, 200, service.raterView(r, base));
+      }
+      if (sub === "/comment" && method === "POST") {
+        const body = await readJson(req);
+        service.comment(r, Array.isArray(body) ? body : body.comments ?? [body], source);
         return json(res, 200, service.raterView(r, base));
       }
     }

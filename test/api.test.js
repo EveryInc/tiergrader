@@ -124,9 +124,9 @@ test("create, upload, invite, rank, results", async () => {
   assert.deepEqual(hook.ratings.map((x) => [x.name, x.tier]).sort(), [["Dan", "B"], ["Kieran", "S"]]);
 
   const csv = (await call("GET", `${api}/results.csv`)).body;
-  assert.match(csv.split("\n")[0], /^rank,file,title,average,Kieran,Dan$/);
-  assert.match(csv, /\n1,two\.txt,two,4,4,\n/);
-  assert.match(csv, /,one\.md,Hook one,3,4,2\n/);
+  assert.match(csv.split("\n")[0], /^rank,file,title,average,Kieran,Dan,Kieran comment,Dan comment$/);
+  assert.match(csv, /\n1,two\.txt,two,4,4,,,\n/);
+  assert.match(csv, /,one\.md,Hook one,3,4,2,,\n/);
 });
 
 test("bad moves are rejected without partial writes", async () => {
@@ -276,6 +276,65 @@ test("CSV export defuses formulas but keeps negative numbers", async () => {
   assert.match(csv, /,one\.md,Hook one,-1,-1,/);
 });
 
+test("comments survive moves, work on unranked cards, and an empty one removes it", async () => {
+  const { kieran } = await setup();
+  let r = await call("POST", `/api/r/${kieran}/comment`, { item_id: 2, text: "  Flat opening  " });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.comments.map((m) => m.text), ["Flat opening"]);
+  await call("POST", `/api/r/${kieran}/comment`, { comments: [{ item_id: 1, text: "Great hook" }] });
+  // Every move rewrites the person's placements; comments live apart from them.
+  await call("POST", `/api/r/${kieran}/place`, { moves: [{ item_id: 1, tier: "S" }, { item_id: 2, tier: "C" }, { item_id: 1, tier: "A", position: 0 }] });
+  await call("POST", `/api/r/${kieran}/place`, { item_id: 1, tier: "unsorted" });
+  let board = (await call("GET", `/api/r/${kieran}/board`)).body.board;
+  assert.deepEqual(board.unsorted.map((x) => [x.title, x.comment]), [["Hook one", "Great hook"], ["Three", undefined]]);
+  assert.equal(board.C[0].comment, "Flat opening");
+  await call("POST", `/api/r/${kieran}/comment`, { item_id: 2, text: "" });
+  board = (await call("GET", `/api/r/${kieran}/board`)).body.board;
+  assert.equal(board.C[0].comment, undefined);
+  assert.equal((await call("POST", `/api/r/${kieran}/comment`, { item_id: 99, text: "x" })).status, 400);
+  assert.equal((await call("POST", `/api/r/${kieran}/comment`, { item_id: 1 })).status, 400);
+});
+
+test("comments are seen wherever rankings are, and only there", async () => {
+  const { api, kieran, dan } = await setup();
+  await call("POST", `/api/r/${dan}/comment`, { item_id: 1, text: "Too long" });
+  await call("POST", `/api/r/${kieran}/comment`, { item_id: 1, text: "Love it" });
+  let view = (await call("GET", `/api/r/${kieran}`)).body;
+  assert.deepEqual(view.comments.map((m) => m.text).sort(), ["Love it", "Too long"]);
+  await call("PATCH", api, { show_others: false });
+  view = (await call("GET", `/api/r/${kieran}`)).body;
+  assert.deepEqual(view.comments.map((m) => m.text), ["Love it"]);
+  // The owner always sees everyone's, in the page data and the results.
+  assert.equal((await call("GET", api)).body.comments.length, 2);
+  const hook = (await call("GET", `${api}/results`)).body.items.find((i) => i.n === 1);
+  assert.deepEqual(hook.comments.map((m) => [m.name, m.text]), [["Kieran", "Love it"], ["Dan", "Too long"]]);
+});
+
+test("a personal link only writes its own comments", async () => {
+  const { api, kieran, dan, raters } = await setup();
+  await call("POST", `/api/r/${dan}/comment`, { item_id: 1, text: "Dan's" });
+  await call("POST", `/api/r/${kieran}/comment`, { item_id: 1, text: "Kieran's", rater_id: raters[1].id });
+  const other = (await call("POST", "/api/collections", { title: "Other" })).body;
+  const { added } = (await call("POST", `${pathOf(other.api_url)}/items`, { items: [{ title: "Elsewhere", text: "x" }] })).body;
+  assert.equal((await call("POST", `/api/r/${kieran}/comment`, { item_id: added[0].id, text: "x" })).status, 400);
+  const said = (await call("GET", api)).body.comments.map((m) => [m.rater_id, m.text]).sort();
+  assert.deepEqual(said, [[raters[0].id, "Kieran's"], [raters[1].id, "Dan's"]].sort());
+});
+
+test("CSV export has each person's comment, escaped", async () => {
+  const { api, kieran, dan } = await setup();
+  await call("POST", `/api/r/${kieran}/place`, { item_id: 1, tier: "A" });
+  await call("POST", `/api/r/${kieran}/comment`, { item_id: 1, text: 'Good, but "hooky"\nSecond line' });
+  await call("POST", `/api/r/${dan}/comment`, { item_id: 2, text: "=1+1" });
+  // An owner who only comments still gets their column.
+  await call("POST", `${api}/comment`, { item_id: 3, text: "Mine" });
+  const csv = (await call("GET", `${api}/results.csv`)).body;
+  assert.equal(csv.split("\n")[0], "rank,file,title,average,Kieran,Dan,Owner,Kieran comment,Dan comment,Owner comment");
+  assert.ok(csv.includes(`1,one.md,Hook one,3,3,,,"Good, but ""hooky""\nSecond line",,\n`));
+  assert.match(csv, /,two\.txt,two,,,,,,'=1\+1,\n/);
+  assert.match(csv, /,Three,,,,,,,Mine\n/);
+});
+
 test("a join name with line breaks makes one person", async () => {
   const { made, api } = await setup();
   const code = pathOf(made.join_url).split("/").pop();
@@ -321,7 +380,7 @@ test("owners rank on their own page; it only counts once they've placed somethin
   const hook = (await call("GET", `${api}/results`)).body.items.find((i) => i.n === 1);
   assert.equal(hook.average, 2); // Kieran S (4) and the owner D (0)
   csv = (await call("GET", `${api}/results.csv`)).body;
-  assert.match(csv.split("\n")[0], /,Owner$/);
+  assert.match(csv.split("\n")[0], /,Owner,Kieran comment,Dan comment,Owner comment$/);
   // Raters see the owner like anyone else once they've ranked.
   const raterView = (await call("GET", `/api/r/${kieran}`)).body;
   assert.ok(raterView.raters.some((r) => r.name === "Owner"));

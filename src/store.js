@@ -21,6 +21,7 @@ export const LIMITS = {
   textChars: 2_000_000,
   titleChars: 200,
   nameChars: 80,
+  commentChars: 4000,
 };
 
 const TEXT_EXT = new Set([
@@ -133,6 +134,14 @@ export function openStore(dataDir) {
       item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
       tier TEXT NOT NULL,
       position INTEGER NOT NULL,
+      PRIMARY KEY (rater_id, item_id)
+    );
+    -- What each person says about a card. Kept apart from placements, which are rewritten on every move.
+    CREATE TABLE IF NOT EXISTS comments (
+      rater_id TEXT NOT NULL REFERENCES raters(id) ON DELETE CASCADE,
+      item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       PRIMARY KEY (rater_id, item_id)
     );
     -- Signed-in creators (Every accounts). Raters never need one.
@@ -467,6 +476,31 @@ export function openStore(dataDir) {
         const ins = q("INSERT INTO placements (rater_id, item_id, tier, position) VALUES (?, ?, ?, ?)");
         for (const [tier, list] of Object.entries(lists)) list.forEach((id, i) => ins.run(rater.id, id, tier, i));
         q("UPDATE raters SET updated_at = ? WHERE id = ?").run(now(), rater.id);
+        touch(rater.collection_id);
+      });
+    },
+
+    listComments(collectionId) {
+      return q(`SELECT m.rater_id, m.item_id, m.text, m.updated_at FROM comments m
+                JOIN raters r ON r.id = m.rater_id WHERE r.collection_id = ?
+                ORDER BY r.created_at, m.item_id`).all(collectionId);
+    },
+
+    // comments: [{ item_id, text }]. Empty text removes the comment.
+    comment(rater, comments) {
+      const items = new Set(q("SELECT id FROM items WHERE collection_id = ?").all(rater.collection_id).map((r) => r.id));
+      for (const c of comments) if (!items.has(c.item_id)) throw httpError(400, `No item ${c.item_id} in this collection.`);
+      tx(() => {
+        const t = now();
+        for (const c of comments) {
+          const text = String(c.text ?? "").trim().slice(0, LIMITS.commentChars);
+          if (!text) q("DELETE FROM comments WHERE rater_id = ? AND item_id = ?").run(rater.id, c.item_id);
+          else {
+            q(`INSERT INTO comments (rater_id, item_id, text, updated_at) VALUES (?, ?, ?, ?)
+               ON CONFLICT(rater_id, item_id) DO UPDATE SET text = excluded.text, updated_at = excluded.updated_at`).run(rater.id, c.item_id, text, t);
+          }
+        }
+        q("UPDATE raters SET updated_at = ? WHERE id = ?").run(t, rater.id);
         touch(rater.collection_id);
       });
     },

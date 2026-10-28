@@ -236,6 +236,10 @@ test("MCP: initialize, list, full workflow", async () => {
   assert.deepEqual(results.items.map((i) => [i.title, i.average]), [["Y", 4], ["X", 0]]);
   const read = await tool("read_item", { link: links[0].url, item_id: "1" });
   assert.equal(read.text, "x");
+  const commented = await tool("comment_items", { person: links[0].url, comments: [{ item_id: "2", text: "Clearer" }] });
+  assert.equal(commented.board.S[0].comment, "Clearer");
+  const after = await tool("get_results", { owner: made.owner_url });
+  assert.deepEqual(after.items[0].comments.map((m) => [m.name, m.text]), [["Kate", "Clearer"]]);
 
   const bad = (await rpc(4, "tools/call", { name: "get_results", arguments: { owner: "nope" } })).result;
   assert.equal(bad.isError, true);

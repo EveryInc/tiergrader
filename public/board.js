@@ -1286,6 +1286,16 @@ const brief = (id) => {
   return { id: it.id, n: it.n, title: it.title, kind: it.kind };
 };
 
+// What the people on screen said about an item: the one person's comment, or everyone's.
+function saidAbout(id, extra) {
+  if (extra) {
+    const list = extra.get(id).comments;
+    return list.length ? { comments: list.map((m) => ({ name: raterName(m.rater_id), text: m.text })) } : {};
+  }
+  const text = commentOf(state.viewing, id);
+  return text ? { comment: text } : {};
+}
+
 const controller = {
   role: boot.role,
   getBoard() {
@@ -1297,8 +1307,10 @@ const controller = {
       viewing,
       editable: editable(),
       scoring: POINTS,
-      tiers: Object.fromEntries(TIER_IDS.map((t) => [t, lists[t].map((id) => (extra ? { ...brief(id), rank: extra.get(id).rank, average: extra.get(id).avg } : brief(id)))])),
-      unranked: lists[UNSORTED].map(brief),
+      tiers: Object.fromEntries(
+        TIER_IDS.map((t) => [t, lists[t].map((id) => ({ ...brief(id), ...(extra ? { rank: extra.get(id).rank, average: extra.get(id).avg } : {}), ...saidAbout(id, extra) }))]),
+      ),
+      unranked: lists[UNSORTED].map((id) => ({ ...brief(id), ...saidAbout(id, extra) })),
       people: state.data.raters.map((r) => ({ name: r.name, ranked: rankedCount(r.id), total: items().length })),
     };
   },
@@ -1331,6 +1343,21 @@ const controller = {
     place(moves);
     return controller.getBoard();
   },
+  commentItems(list) {
+    if (!Array.isArray(list) || !list.length) throw new Error("Give comments: [{ item, text }].");
+    if (state.viewing !== me().id) setViewing(me().id);
+    const comments = list.map((c) => {
+      const it = resolveItem(c.item ?? c.item_id ?? c.id);
+      if (!it) throw new Error(`No item "${c.item ?? c.item_id}".`);
+      if (typeof c.text !== "string") throw new Error("Each comment needs text (an empty string removes it).");
+      return { item_id: it.id, text: c.text.trim() };
+    });
+    state.localVersion++;
+    for (const c of comments) setComment(c.item_id, c.text);
+    render();
+    save("/comment", { comments }, "those comments");
+    return controller.getBoard();
+  },
   view(person) {
     const v = resolveView(person);
     if (!v) throw new Error(`No one called "${person}" here. People: ${state.data.raters.map((r) => r.name).join(", ") || "none yet"}.`);
@@ -1340,6 +1367,7 @@ const controller = {
   },
   getResults() {
     const res = results();
+    const said = commentsByItem();
     return {
       scoring: POINTS,
       items: res.items.map((r) => ({
@@ -1351,6 +1379,7 @@ const controller = {
         ratings_count: r.count,
         consensus_tier: r.tier,
         ratings: Object.fromEntries(Object.entries(r.ratings).map(([rid, t]) => [raterName(rid), t])),
+        comments: Object.fromEntries((said.get(r.id) ?? []).map((m) => [raterName(m.rater_id), m.text])),
       })),
       people: res.raters.map((r) => ({ name: r.name, ranked: r.ranked, total: r.total })),
     };

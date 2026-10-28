@@ -44,19 +44,20 @@ If the user hands you a link, `curl -s <link>?format=md` tells you what it is an
 
 5. **Pull results** when asked, or when everyone is done (`raters[].ranked == total` in `GET $API_URL`):
    ```sh
-   curl -s $API_URL/results      # averages, ranks, each person's tier per item, each person's board
+   curl -s $API_URL/results      # averages, ranks, each person's tier and comment per item, each person's board
    curl -s $API_URL/results.csv
    ```
-   Report the top and bottom items with their averages, where people disagreed most (an S next to a D), and anyone who hasn't finished. If the titles were blind, map them back to the originals.
+   Report the top and bottom items with their averages, where people disagreed most (an S next to a D) and what their comments say about why, and anyone who hasn't finished. If the titles were blind, map them back to the originals.
 
 ## Ranking for someone
 
 Only when that person asks you to rank on their behalf, using their personal link:
 `GET /api/r/<token>/board`, read items with `GET /api/r/<token>/items/<id>`, then
 `POST /api/r/<token>/place` with `{"moves": [{"item_id": "<id or number>", "tier": "A"}]}`.
+If they want the reasons written down, `POST /api/r/<token>/comment` with `{"comments": [{"item_id": "<id or number>", "text": "Strong hook, weak ending"}]}`; each person has one comment per item, and other people with access see it.
 
-If the person has the page open in a browser you can drive, it registers WebMCP tools (`tiergrader_get_board`, `tiergrader_read_item`, `tiergrader_place_items`, ...) and the same functions on `window.tiergrader`; the cards move on their screen.
+If the person has the page open in a browser you can drive, it registers WebMCP tools (`tiergrader_get_board`, `tiergrader_read_item`, `tiergrader_place_items`, `tiergrader_comment_items`, ...) and the same functions on `window.tiergrader`; the cards move on their screen.
 
 ## MCP
 
-`$TIERGRADER_URL/mcp` is a remote MCP server with the same operations (`create_collection`, `add_items`, `create_rater_links`, `get_results`, `place_items`, ...), for clients that can't run curl.
+`$TIERGRADER_URL/mcp` is a remote MCP server with the same operations (`create_collection`, `add_items`, `create_rater_links`, `get_results`, `place_items`, `comment_items`, ...), for clients that can't run curl.

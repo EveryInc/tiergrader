@@ -20,6 +20,7 @@ export const LIMITS = {
   ratersPerCollection: 500,
   textChars: 2_000_000,
   titleChars: 200,
+  contextChars: 5000,
   nameChars: 80,
 };
 
@@ -68,6 +69,8 @@ function deriveTitle({ title, filename, kind, text }) {
   const base = (filename || "Untitled").replace(/\.[^./]+$/, "");
   return base.slice(0, LIMITS.titleChars) || "Untitled";
 }
+
+const cleanContext = (context) => String(context ?? "").trim().slice(0, LIMITS.contextChars);
 
 function makeSnippet(kind, text) {
   if (!text) return "";
@@ -183,6 +186,10 @@ export function openStore(dataDir) {
   if (!db.prepare("PRAGMA table_info(raters)").all().some((c) => c.name === "guest")) {
     db.exec("ALTER TABLE raters ADD COLUMN guest INTEGER NOT NULL DEFAULT 0;");
   }
+  // Context the owner gives raters about a card: a brief, a link to the source, what to look for.
+  if (!db.prepare("PRAGMA table_info(items)").all().some((c) => c.name === "context")) {
+    db.exec("ALTER TABLE items ADD COLUMN context TEXT NOT NULL DEFAULT '';");
+  }
 
   const now = () => new Date().toISOString();
   const q = (sql) => db.prepare(sql);
@@ -199,7 +206,7 @@ export function openStore(dataDir) {
   };
   const touch = (collectionId) => q("UPDATE collections SET updated_at = ? WHERE id = ?").run(now(), collectionId);
 
-  const ITEM_COLUMNS = "id, collection_id, position, title, filename, mime, kind, size, text, url, created_at";
+  const ITEM_COLUMNS = "id, collection_id, position, title, filename, mime, kind, size, text, url, context, created_at";
 
   const store = {
     createCollection({ title, description = "" }, ownerUserId = null) {
@@ -336,11 +343,11 @@ export function openStore(dataDir) {
       q("DELETE FROM collections WHERE id = ?").run(id);
     },
 
-    // input: { title?, filename?, mime?, data?: Buffer, text?: string, url?: string }
+    // input: { title?, filename?, mime?, data?: Buffer, text?: string, url?: string, context?: string }
     addItem(collectionId, input) {
       const count = q("SELECT COUNT(*) AS n FROM items WHERE collection_id = ?").get(collectionId).n;
       if (count >= LIMITS.itemsPerCollection) throw httpError(400, `A collection holds at most ${LIMITS.itemsPerCollection} items.`);
-      let { title, filename = "", mime = "", data, text, url } = input;
+      let { title, filename = "", mime = "", data, text, url, context = "" } = input;
       filename = String(filename || "").split(/[\\/]/).pop().slice(0, 255);
       if (!filename && text !== undefined && !data) filename = title ? `${title}.md` : "text.md";
       const detected = url && !data && text === undefined ? { kind: "link", mime: "text/uri-list" } : detectKind(filename, mime);
@@ -358,10 +365,11 @@ export function openStore(dataDir) {
         size: data ? data.length : 0,
         text: text ?? null,
         url: url ? String(url).slice(0, 2000) : null,
+        context: cleanContext(context),
       };
-      q(`INSERT INTO items (id, collection_id, position, title, filename, mime, kind, size, text, url, blob, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(item.id, collectionId, position, item.title, item.filename, item.mime, item.kind, item.size, item.text, item.url, data ?? null, now());
+      q(`INSERT INTO items (id, collection_id, position, title, filename, mime, kind, size, text, url, context, blob, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(item.id, collectionId, position, item.title, item.filename, item.mime, item.kind, item.size, item.text, item.url, item.context, data ?? null, now());
       touch(collectionId);
       return store.getItem(item.id);
     },
@@ -376,12 +384,13 @@ export function openStore(dataDir) {
       return q(`SELECT ${ITEM_COLUMNS} FROM items WHERE collection_id = ? ORDER BY position`).all(collectionId)
         .map((it, i) => ({ ...it, n: i + 1, snippet: makeSnippet(it.kind, it.text) }));
     },
-    updateItem(collectionId, itemId, { title }) {
+    updateItem(collectionId, itemId, { title, context }) {
       const it = store.getItem(itemId);
       if (!it || it.collection_id !== collectionId) throw httpError(404, "No such item in this collection.");
       if (title !== undefined && String(title).trim()) {
         q("UPDATE items SET title = ? WHERE id = ?").run(String(title).trim().slice(0, LIMITS.titleChars), itemId);
       }
+      if (context !== undefined) q("UPDATE items SET context = ? WHERE id = ?").run(cleanContext(context), itemId);
       touch(collectionId);
       return store.getItem(itemId);
     },

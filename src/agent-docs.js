@@ -59,6 +59,7 @@ ${CREATE_AUTH[mode](base)}
      -d '{"items": [{"title": "Post A", "text": "# Markdown here"}, {"title": "Landing page", "url": "https://example.com"}, {"filename": "chart.png", "content_base64": "..."}]}'
    \`\`\`
    A card's title is the \`title\` you give, else the first \`# heading\` of a markdown file, else the file name. Raters never see file names, so for a blind comparison give neutral titles ("Post A") rather than ones that name the model.
+   Give a card \`context\` (markdown, up to 5,000 characters) when raters need something beside it, such as the brief it answers or a link to the source. It shows above the card in the reader. Raters see it, so keep it neutral in a blind comparison. With multipart uploads, a \`context\` field applies to every file in that request.
 
 3. Make a personal link for each person.
 
@@ -83,7 +84,7 @@ ${CREATE_AUTH[mode](base)}
 | \`DELETE {api_url}\` | Deletes the collection and everything in it |
 | \`POST {api_url}/items\` | Add items (multipart files, or JSON as above) |
 | \`GET {api_url}/items/{id}\` | One item, with its full text when it has any |
-| \`PATCH {api_url}/items/{id}\` | \`{"title"}\` |
+| \`PATCH {api_url}/items/{id}\` | \`{"title", "context"}\`. An empty \`context\` removes it |
 | \`DELETE {api_url}/items/{id}\` | Remove an item |
 | \`POST {api_url}/raters\` | \`{"names": [...]}\` or \`{"name"}\`: personal links |
 | \`PATCH {api_url}/raters/{id}\` | \`{"name"}\` |
@@ -121,7 +122,7 @@ Without WebMCP, the same functions are on \`window.tiergrader\` (\`await tiergra
 
 ## MCP server
 
-\`${base}/mcp\` is a remote MCP server (streamable HTTP, no sign-in) with the same operations: \`request_agent_key\`, \`create_collection\`, \`add_items\`, \`get_collection\`, \`create_rater_links\`, \`get_results\`, \`update_collection\`, \`remove_item\`, \`get_board\`, \`read_item\`, \`place_items\`. Tools take the owner or personal link (or bare token) as an argument.
+\`${base}/mcp\` is a remote MCP server (streamable HTTP, no sign-in) with the same operations: \`request_agent_key\`, \`create_collection\`, \`add_items\`, \`get_collection\`, \`create_rater_links\`, \`get_results\`, \`update_collection\`, \`update_item\`, \`remove_item\`, \`get_board\`, \`read_item\`, \`place_items\`. Tools take the owner or personal link (or bare token) as an argument.
 `;
 }
 

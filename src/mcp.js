@@ -38,7 +38,7 @@ const TOOLS = [
   },
   {
     name: "add_items",
-    description: "Add items (cards) to a collection: text or markdown you have, a web link, or a file as base64. A card's title is the title you give, else the markdown's first heading, else the filename. Raters never see filenames, so use neutral titles for blind comparisons.",
+    description: "Add items (cards) to a collection: text or markdown you have, a web link, or a file as base64. A card's title is the title you give, else the markdown's first heading, else the filename. Raters never see filenames, so use neutral titles for blind comparisons. Give a card context when raters need something beside it, such as the brief it answers.",
     inputSchema: {
       type: "object",
       properties: {
@@ -54,6 +54,7 @@ const TOOLS = [
               filename: { type: "string", description: "e.g. post-a.md or chart.png; sets how the content previews." },
               mime: { type: "string" },
               content_base64: { type: "string", description: "File bytes, base64-encoded (images, PDFs...)." },
+              context: { type: "string", description: "Markdown shown to raters above the card: a brief, a link to the source, what to judge. Keep it neutral for blind comparisons." },
             },
           },
         },
@@ -89,6 +90,15 @@ const TOOLS = [
       type: "object",
       properties: { ...ownerArg, title: { type: "string" }, description: { type: "string" }, show_others: { type: "boolean" } },
       required: ["owner"],
+    },
+  },
+  {
+    name: "update_item",
+    description: "Change one item's title or context (markdown shown to raters above the card; an empty string removes it).",
+    inputSchema: {
+      type: "object",
+      properties: { ...ownerArg, item_id: { type: "string" }, title: { type: "string" }, context: { type: "string" } },
+      required: ["owner", "item_id"],
     },
   },
   {
@@ -178,6 +188,11 @@ export function createMcpHandler({ store, service, version }) {
       case "update_collection": {
         const { owner: _o, ...patch } = args;
         return { collection: service.updateCollection(owner(args), patch, "mcp") };
+      }
+      case "update_item": {
+        const c = owner(args);
+        service.updateItem(c, args.item_id, { title: args.title, context: args.context }, "mcp");
+        return service.readItem(c.id, args.item_id, base);
       }
       case "remove_item":
         service.deleteItem(owner(args), args.item_id, "mcp");

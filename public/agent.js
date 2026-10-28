@@ -15,7 +15,7 @@ export function registerAgentTools(ctrl) {
     ...(owner ? { createLinks: (names) => ctrl.createLinks(names), addTextItems: (items) => ctrl.addTextItems(items) } : {}),
     help:
       "tiergrader page API. getBoard(); readItem(idOrNumber); placeItems([{item, tier, position?}]) with tier S/A/B/C/D/F/unranked; " +
-      "view('me' | 'everyone' | name); getResults()" + (owner ? "; createLinks(['Kieran', 'Dan']); addTextItems([{title, text}])" : ""),
+      "view('me' | 'everyone' | name); getResults()" + (owner ? "; createLinks(['Kieran', 'Dan']); addTextItems([{title, text, context?}])" : ""),
   };
 
   const tools = [
@@ -96,7 +96,15 @@ export function registerAgentTools(ctrl) {
           properties: {
             items: {
               type: "array",
-              items: { type: "object", properties: { title: { type: "string" }, text: { type: "string" } }, required: ["text"] },
+              items: {
+                type: "object",
+                properties: {
+                  title: { type: "string" },
+                  text: { type: "string" },
+                  context: { type: "string", description: "Markdown shown to raters above the card, e.g. a link to the brief." },
+                },
+                required: ["text"],
+              },
             },
           },
           required: ["items"],

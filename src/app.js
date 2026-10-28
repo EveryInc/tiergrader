@@ -171,12 +171,14 @@ export function createApp({
       }
       const files = [...form.values()].filter((v) => typeof v !== "string");
       const title = form.get("title");
+      const context = form.get("context");
       return Promise.all(
         files.map(async (f) => ({
           filename: f.name,
           mime: f.type,
           data: Buffer.from(await f.arrayBuffer()),
           title: files.length === 1 && typeof title === "string" ? title : undefined,
+          context: typeof context === "string" ? context : undefined,
         })),
       );
     }

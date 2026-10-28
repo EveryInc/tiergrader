@@ -195,6 +195,8 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 .results-table th { font: 500 11.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--panel); position: sticky; top: 0; }
 .results-table td.title-cell { white-space: normal; min-width: 220px; font-weight: 600; cursor: pointer; }
 .results-table td.title-cell:hover { text-decoration: underline; }
+.results-table td.comments-cell { white-space: normal; min-width: 240px; }
+.comments-cell .comment { font-size: 13px; }
 .results-table .num-cell { font-family: var(--mono); color: var(--ink-2); font-weight: 400; }
 .tier-pill { display: inline-block; min-width: 24px; padding: 2px 6px; font: 600 12px/1.4 var(--mono); text-align: center; color: var(--ink); background: var(--tier); }
 .tier-pill.none { background: transparent; color: var(--line-3); font-weight: 400; }
@@ -244,6 +246,11 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 .tier-btn[aria-pressed="true"] { background: var(--tier); border: 2px solid var(--ink); }
 .ratings-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--ink-2); font-size: 14px; min-width: 0; }
 .ratings-line .who { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; background: var(--card); border: 1px solid var(--line); color: var(--ink); font-size: 13px; }
+.preview-note { flex: none; padding: 0 16px 12px 32px; background: var(--panel); }
+.comment-box { min-height: 40px; max-height: 30vh; field-sizing: content; font-size: 14px; }
+.comment { margin: 0; color: var(--ink-2); font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+.comment + .comment { margin-top: 4px; }
+.comment b { color: var(--ink); font-weight: 600; margin-right: 4px; }
 body.reading { overflow: hidden; }
 
 /* ---------- dialogs ---------- */
@@ -421,6 +428,7 @@ dialog::backdrop { background: rgba(18, 18, 18, .52); }
   .preview-head h2 { font-size: 24px; }
   .preview-body .doc, .preview-body pre.plain { padding: 18px 18px 48px; font-size: 16px; }
   .preview-bar { padding: 10px 12px; gap: 8px; }
+  .preview-note { padding: 0 12px 10px; }
   .tier-buttons { flex: 1; gap: 4px; }
   .tier-btn { flex: 1 1 0; width: auto; min-width: 0; }
   .hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "copy" "demo" "form"; margin-top: 32px; }

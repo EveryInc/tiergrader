@@ -27,6 +27,7 @@ No dependencies to install: Node 24+ (`node:sqlite`, `node:http`). The page load
   - **Personal link** `/r/…`: one person's ranking. Make one per person (Share → names) and DM it to them.
   - **Open link** `/j/…`: anyone types their name and gets their own personal link.
 - **Each file is a card.** Click one to read it in a modal: just the title and the post, image, page or PDF, with the tier buttons underneath. Anything else downloads. Only raster images, PDF, audio and video are served as-is; everything else (HTML, SVG, text…) is served in a sandbox with no access to the app.
+- **Comments:** under the tier buttons, each person can write why a card is where it is. It saves as you type, works on unranked cards too, and moving the card keeps it. Anyone who can see a person's tiers sees their comments: in the reader, on hover in "Everyone", in the table and in the CSV.
 - **Scoring:** S 4 · A 3 · B 2 · C 1 · D 0 · F −1. Unplaced cards don't count. The "Everyone" view puts each card in the tier nearest its average (ties round up) and shows each person's vote on it; "Table" lists them all.
 - **Live:** open pages update as people rank, files are added, or links are made.
 - **Every view has its own link.** The address bar follows what's on screen, so you can share or bookmark it, and Back and Forward retrace it: `?view=lauren` (one person's ranking, by name), `?view=everyone` (the average; add `&table=1` for the table), and `&card=<id>` with the reader open on that card. A link with none of these opens your own ranking, as before.
@@ -50,7 +51,7 @@ Click a card to open it in the reader, then:
 | `⌘Z` | Undo |
 | `?` | All shortcuts |
 
-After you place an unsorted card the next unsorted one opens, so grading is read, key, read, key. Plain letters work because nothing on the board takes typing; on a Mac, `⌥S` etc. also work (the app reads the physical key, so `ß` still means S).
+After you place an unsorted card the next unsorted one opens, so grading is read, key, read, key. Plain letters work because nothing on the board takes typing except the comment box, where keys just type (`Esc` leaves it and keeps what you wrote); on a Mac, `⌥S` etc. also work (the app reads the physical key, so `ß` still means S).
 
 ## Who can make collections
 

@@ -97,7 +97,7 @@ const TOOLS = [
     description: "Change one item's title or context (markdown shown to raters above the card; an empty string removes it).",
     inputSchema: {
       type: "object",
-      properties: { ...ownerArg, item_id: { type: "string" }, title: { type: "string" }, context: { type: "string" } },
+      properties: { ...ownerArg, item_id: { type: "string", description: "Item id or number." }, title: { type: "string" }, context: { type: "string" } },
       required: ["owner", "item_id"],
     },
   },
@@ -191,8 +191,9 @@ export function createMcpHandler({ store, service, version }) {
       }
       case "update_item": {
         const c = owner(args);
-        service.updateItem(c, args.item_id, { title: args.title, context: args.context }, "mcp");
-        return service.readItem(c.id, args.item_id, base);
+        const { id } = service.readItem(c.id, args.item_id, base);
+        service.updateItem(c, id, { title: args.title, context: args.context }, "mcp");
+        return service.readItem(c.id, id, base);
       }
       case "remove_item":
         service.deleteItem(owner(args), args.item_id, "mcp");

@@ -258,8 +258,7 @@ test("MCP: initialize, list, full workflow", async () => {
   assert.deepEqual(results.items.map((i) => [i.title, i.average]), [["Y", 4], ["X", 0]]);
   const read = await tool("read_item", { link: links[0].url, item_id: "1" });
   assert.equal(read.text, "x");
-  const id = read.id;
-  const updated = await tool("update_item", { owner: made.owner_url, item_id: id, context: "The brief: https://example.com" });
+  const updated = await tool("update_item", { owner: made.owner_url, item_id: "1", context: "The brief: https://example.com" });
   assert.equal(updated.context, "The brief: https://example.com");
   assert.equal(updated.title, "X");
 

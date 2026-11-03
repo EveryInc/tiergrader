@@ -214,6 +214,28 @@ test("uploaded HTML is served sandboxed", async () => {
   assert.equal(res.headers.get("x-content-type-options"), "nosniff");
 });
 
+test("context on a card: set on upload or later, shown to raters, cleared when empty", async () => {
+  const { api, kieran } = await setup();
+  const { added } = (await call("POST", `${api}/items`, { items: [{ title: "Four", text: "four", context: "  Brief: [posting](https://example.com/job)  " }] })).body;
+  assert.equal(added[0].context, "Brief: [posting](https://example.com/job)");
+  const one = (await call("GET", api)).body.items[0];
+  assert.equal(one.context, "");
+  const patched = (await call("PATCH", `${api}/items/${one.id}`, { context: "See https://example.com" })).body;
+  assert.equal(patched.context, "See https://example.com");
+  assert.equal(patched.title, one.title);
+  const seen = (await call("GET", `/api/r/${kieran}`)).body.items;
+  assert.equal(seen.find((it) => it.id === one.id).context, "See https://example.com");
+  assert.equal(seen.find((it) => it.id === added[0].id).context, "Brief: [posting](https://example.com/job)");
+  assert.equal((await call("PATCH", `${api}/items/${one.id}`, { context: "" })).body.context, "");
+  assert.equal((await call("PATCH", `${api}/items/${one.id}`, { context: "x".repeat(6000) })).body.context.length, 5000);
+
+  const fd = new FormData();
+  fd.append("file", new Blob(["five"], { type: "text/plain" }), "five.txt");
+  fd.append("context", "Uploaded with context");
+  const [five] = (await call("POST", `${api}/items`, fd)).body.added;
+  assert.equal(five.context, "Uploaded with context");
+});
+
 test("MCP: initialize, list, full workflow", async () => {
   const rpc = async (id, method, params) => (await call("POST", "/mcp", { jsonrpc: "2.0", id, method, params })).body;
   const init = await rpc(1, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } });
@@ -236,6 +258,9 @@ test("MCP: initialize, list, full workflow", async () => {
   assert.deepEqual(results.items.map((i) => [i.title, i.average]), [["Y", 4], ["X", 0]]);
   const read = await tool("read_item", { link: links[0].url, item_id: "1" });
   assert.equal(read.text, "x");
+  const updated = await tool("update_item", { owner: made.owner_url, item_id: "1", context: "The brief: https://example.com" });
+  assert.equal(updated.context, "The brief: https://example.com");
+  assert.equal(updated.title, "X");
 
   const bad = (await rpc(4, "tools/call", { name: "get_results", arguments: { owner: "nope" } })).result;
   assert.equal(bad.isError, true);

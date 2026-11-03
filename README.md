@@ -34,6 +34,7 @@ No dependencies to install: Node 24+ (`node:sqlite`, `node:http`). The page load
 - People can see each other's rankings by default; the owner can turn that off in Share.
 - **Examples:** three example tier grades are seeded at startup (`public/examples.js`, also acted out by the landing-page demo). `/try/<slug>` gives each visitor a private guest ranking next to Dan's and Kate's; guests never see each other, and are cleared after two weeks.
 - Raters never see file names, so for a blind comparison give the cards neutral titles ("Post A").
+- **Context on a card.** The owner can give any card context (markdown with links, such as the brief it answers), shown above it in the reader. Edit it from the reader, or send `context` with the item.
 
 ## Keyboard
 
@@ -72,7 +73,7 @@ Getting an Every OAuth client: ask the Every team to provision one with the redi
 - **Agents get their own key.** On a server with Every sign-in, an agent calls `POST /api/agent-keys` (or the MCP tool `request_agent_key`) and gets a key plus an approve link. It sends you the link; you sign in with Every if you need to and press Approve, and the key starts working. No password or hand-made key passes through chat, and the key shows up under Agent on the home page, where you can delete it. Links last an hour, and a key nobody approved never works.
 - **REST API:** documented at `/llms.txt`. Create a collection, `curl -F file=@…` uploads, make personal links, pull `/results` or `/results.csv`. On a server with Every sign-in, only creating a collection needs an agent key.
 - **Agent skill:** [`skills/tiergrader/SKILL.md`](skills/tiergrader/SKILL.md) walks an agent through the whole loop, including DMing each person their link over a Slack connector (after you OK the messages) and reporting results. Copy it into `~/.claude/skills/` and set `TIERGRADER_URL` (and `TIERGRADER_KEY`, your agent key).
-- **MCP server:** `POST /mcp` (streamable HTTP, stateless; tools take the owner or personal link as an argument, and `create_collection` takes your agent key as a bearer header or `/mcp?key=…`): `request_agent_key`, `create_collection`, `add_items`, `get_collection`, `create_rater_links`, `get_results`, `update_collection`, `remove_item`, `get_board`, `read_item`, `place_items`.
+- **MCP server:** `POST /mcp` (streamable HTTP, stateless; tools take the owner or personal link as an argument, and `create_collection` takes your agent key as a bearer header or `/mcp?key=…`): `request_agent_key`, `create_collection`, `add_items`, `get_collection`, `create_rater_links`, `get_results`, `update_collection`, `update_item`, `remove_item`, `get_board`, `read_item`, `place_items`.
 - **WebMCP:** board pages register tools on `document.modelContext` (falling back to `navigator.modelContext`): `tiergrader_get_board`, `tiergrader_read_item`, `tiergrader_place_items`, `tiergrader_view`, `tiergrader_get_results`, plus `tiergrader_create_links` and `tiergrader_add_text_items` on owner pages. An agent with the page open can sort cards for you and you watch them move. The same functions are on `window.tiergrader` for agents that can run JavaScript but don't speak WebMCP.
 
 ## Deploy

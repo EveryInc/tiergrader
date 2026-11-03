@@ -34,6 +34,7 @@ If the user hands you a link, `curl -s <link>?format=md` tells you what it is an
 
 2. **Upload the files.** `curl -s -X POST $API_URL/items -F file=@a.md -F file=@b.md ...` (25 MB each). For text you have in hand, send JSON: `{"items": [{"title": "Post A", "text": "..."}]}`.
    - For a blind comparison (e.g. outputs from different models), give neutral titles like "Post A" and keep a private key of which is which. Raters never see file names, but they do see titles and a markdown file's first `# heading`.
+   - When raters need something beside a card to judge it (the brief or job posting it answers, a link to the source), give it a `context`: markdown shown above the card. Add it per item in JSON (`{"title": "Post A", "text": "...", "context": "Brief: [link](https://...)"}`), or later with `PATCH $API_URL/items/<id>` `{"context": "..."}`. Raters see it, so keep it neutral in a blind comparison.
 
 3. **Make a personal link per person.**
    ```sh

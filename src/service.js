@@ -22,6 +22,7 @@ export function createService(store, { broadcast = () => {} } = {}) {
     snippet: it.snippet,
     file_url: it.kind === "link" ? null : `${base}/f/${it.id}`,
     link_url: it.url || null,
+    context: it.context || "",
     ...(owner ? { filename: it.filename } : {}),
   });
 
@@ -193,7 +194,7 @@ export function createService(store, { broadcast = () => {} } = {}) {
       return collectionInfo(next);
     },
 
-    // inputs: [{ title?, text?, url?, filename?, mime?, content_base64?, data?: Buffer }]
+    // inputs: [{ title?, text?, url?, filename?, mime?, content_base64?, data?: Buffer, context? }]
     addItems(c, inputs, base, source) {
       if (!Array.isArray(inputs) || inputs.length === 0) throw httpError(400, "No items given.");
       const added = [];
@@ -205,7 +206,7 @@ export function createService(store, { broadcast = () => {} } = {}) {
           const text = input.text === undefined || input.text === null ? undefined : String(input.text);
           if (!data && text === undefined && !input.url) throw httpError(400, "Each item needs text, url, content_base64 or a file.");
           if (input.url && !/^https?:\/\//i.test(String(input.url))) throw httpError(400, "url must start with http:// or https://");
-          const it = store.addItem(c.id, { title: input.title, filename: input.filename, mime: input.mime, data, text, url: input.url });
+          const it = store.addItem(c.id, { title: input.title, filename: input.filename, mime: input.mime, data, text, url: input.url, context: input.context });
           added.push(it);
         }
       } finally {

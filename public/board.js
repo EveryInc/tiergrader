@@ -333,6 +333,7 @@ app.innerHTML = `
     <div class="reader-scrim" data-act="close"></div>
     <section class="preview" role="dialog" aria-modal="true" aria-label="Reader">
       <div class="preview-head"></div>
+      <div class="preview-context" hidden></div>
       <div class="preview-body"></div>
       <div class="preview-bar"></div>
     </section>
@@ -343,7 +344,7 @@ const actions = app.querySelector(".topbar-actions");
 const boardScroll = app.querySelector(".board-scroll");
 const reader = app.querySelector(".reader");
 const preview = app.querySelector(".preview");
-const [pHead, pBody, pBar] = preview.children;
+const [pHead, pContext, pBody, pBar] = preview.children;
 const TRASH_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>`;
 const pointsLabel = (p) => (p > 0 ? `+${p}` : p < 0 ? `−${-p}` : "0");
 
@@ -608,6 +609,7 @@ function renderPreview() {
   const placeRow = editable()
     ? `<div class="tier-buttons">${TIERS.map((t) => `<button class="tier-btn" style="--tier:${t.color}" data-place="${t.id}" aria-pressed="${locate(me().id, it.id).tier === t.id}" title="${t.id}: ${esc(t.meaning)} (${t.points} pts) · press ${t.id} or ${t.points === -1 ? "−" : t.points}">${t.id}</button>`).join("")}</div>`
     : `<div class="ratings-line">${ratingsLine(it)}</div>`;
+  renderContext(it);
   pBar.innerHTML = `${placeRow}
     <div class="preview-nav">
       <button class="icon-btn" data-act="prev" title="Previous (←)" aria-label="Previous">‹</button>
@@ -616,6 +618,56 @@ function renderPreview() {
   if (previewBodyFor !== it.id) {
     previewBodyFor = it.id;
     renderPreviewBody(it);
+  }
+}
+
+// What the owner tells raters about a card, above it: the brief it answers, a link to the source.
+// The owner adds and edits it here; it saves when the box loses focus.
+let contextEditing = null;
+let contextShown = null;
+const markdown = (text) => (window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parse(text)) : `<p>${esc(text)}</p>`);
+
+function renderContext(it) {
+  if (contextEditing === it.id) return;
+  const key = `${it.id}\n${it.context}`;
+  if (contextShown === key) return;
+  contextShown = key;
+  const edit = (label) => (OWNER ? `<button class="btn ghost small" data-act="edit-context">${label}</button>` : "");
+  pContext.hidden = !it.context && !OWNER;
+  pContext.classList.toggle("empty", !it.context);
+  pContext.innerHTML = it.context ? `<div class="doc">${markdown(it.context)}</div>${edit("Edit")}` : edit("+ Add context for raters");
+}
+
+function editContext() {
+  const it = state.selected && byId.get(state.selected);
+  if (!OWNER || !it) return;
+  contextEditing = it.id;
+  contextShown = null;
+  pContext.hidden = false;
+  pContext.classList.remove("empty");
+  pContext.innerHTML = `
+    <textarea class="input context-box" data-context-for="${it.id}" placeholder="Markdown. e.g. Written for [this job posting](https://…)">${esc(it.context)}</textarea>
+    <span class="context-hint">Raters see this above the card. Saves when you click away · Esc cancels</span>`;
+  pContext.querySelector("textarea").focus();
+}
+
+async function saveContext(el) {
+  const it = byId.get(el.dataset.contextFor);
+  const cancel = el.dataset.cancel === "1";
+  const value = el.value.trim();
+  contextEditing = null;
+  contextShown = null;
+  if (!it) return;
+  const changed = !cancel && value !== it.context;
+  if (changed) it.context = value;
+  if (state.selected === it.id && state.preview) renderContext(it);
+  if (!changed) return;
+  try {
+    await api(`/items/${it.id}`, { method: "PATCH", json: { context: value } });
+    await refresh();
+  } catch (err) {
+    toast(`Couldn't save the context: ${err.message}`);
+    await refresh();
   }
 }
 
@@ -1051,6 +1103,7 @@ app.addEventListener("click", (e) => {
   else if (act === "next") step(1);
   else if (act === "close") select(null, { open: false });
   else if (act === "remove-item") removeItem(state.selected);
+  else if (act === "edit-context") editContext();
   else if (act === "about") openAbout();
 });
 
@@ -1059,6 +1112,7 @@ document.addEventListener("focusin", (e) => e.target.matches?.("[data-select]") 
 
 app.addEventListener("focusout", (e) => {
   if (e.target.isContentEditable) saveEdit(e.target);
+  if (e.target.dataset?.contextFor) saveContext(e.target);
 });
 
 const KEY_TIERS = { s: "S", a: "A", b: "B", c: "C", d: "D", f: "F", 4: "S", 3: "A", 2: "B", 1: "C", 0: "D", "-": "F", "−": "F", u: UNSORTED };
@@ -1086,6 +1140,11 @@ document.addEventListener("keydown", (e) => {
       el.textContent = byId.get(el.dataset.editItem)?.title ?? el.textContent;
       el.blur();
     }
+    return;
+  }
+  if (el?.dataset?.contextFor && (e.key === "Escape" || (e.key === "Enter" && (e.metaKey || e.ctrlKey)))) {
+    if (e.key === "Escape") el.dataset.cancel = "1";
+    el.blur();
     return;
   }
   if (document.querySelector("dialog[open]") || /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName)) return;
@@ -1231,6 +1290,7 @@ const controller = {
       text: text && text.length > 60000 ? `${text.slice(0, 60000)}\n\n[truncated]` : text,
       file_url: it.kind === "link" ? null : location.origin + fileUrl(it),
       link_url: it.link_url,
+      context: full.context || undefined,
       note: text === null ? "No text for this kind of item; open file_url to look at it." : undefined,
     };
   },

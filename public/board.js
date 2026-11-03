@@ -49,10 +49,10 @@ function remember(key, entry) {
   }
 }
 
-async function api(path = "", { method = "GET", json, body } = {}) {
+async function api(path = "", { method = "GET", json, body, keepalive = false } = {}) {
   const headers = { "x-tiergrader-client": CLIENT };
   if (json !== undefined) headers["content-type"] = "application/json";
-  const res = await fetch(API + path, { method, headers, body: json !== undefined ? JSON.stringify(json) : body });
+  const res = await fetch(API + path, { method, headers, body: json !== undefined ? JSON.stringify(json) : body, keepalive });
   const isJson = res.headers.get("content-type")?.includes("json");
   const out = isJson ? await res.json() : await res.text();
   if (!res.ok) throw Object.assign(new Error(out?.error || `Request failed (${res.status})`), { status: res.status });
@@ -188,10 +188,10 @@ function setComment(itemId, text) {
 
 // A write survives a brief server hiccup (a redeploy, a dropped connection): retry for a few seconds before
 // giving up. Moves set absolute positions and comments their whole text, so sending one twice lands the same way.
-async function post(path, json) {
+async function post(path, json, { keepalive = false } = {}) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await api(path, { method: "POST", json });
+      return await api(path, { method: "POST", json, keepalive });
     } catch (err) {
       const transient = !err.status || err.status >= 500;
       if (!transient || attempt >= 3) throw err;
@@ -200,11 +200,11 @@ async function post(path, json) {
   }
 }
 
-function save(path, json, what = "that move") {
+function save(path, json, what = "that move", options) {
   state.pendingWrites++;
   writes = writes.then(async () => {
     try {
-      const fresh = await post(path, json);
+      const fresh = await post(path, json, options);
       if (state.pendingWrites === 1 && !state.dragging) applyData(fresh);
     } catch (err) {
       toast(`Couldn't save ${what}: ${err.message}`);
@@ -248,10 +248,10 @@ let commentDraft = null;
 function draftComment(itemId, text) {
   commentDraft = { item_id: itemId, text };
   clearTimeout(commentTimer);
-  commentTimer = setTimeout(saveComment, 800);
+  commentTimer = setTimeout(() => saveComment(), 800);
 }
 
-function saveComment() {
+function saveComment({ keepalive = false } = {}) {
   clearTimeout(commentTimer);
   const draft = commentDraft;
   commentDraft = null;
@@ -260,8 +260,13 @@ function saveComment() {
   if (text === commentOf(me().id, draft.item_id)) return;
   state.localVersion++;
   setComment(draft.item_id, text);
-  save("/comment", { comments: [{ item_id: draft.item_id, text }] }, "your comment");
+  save("/comment", { comments: [{ item_id: draft.item_id, text }] }, "your comment", { keepalive });
 }
+
+// Closing or reloading the tab skips both the timer and the blur, so send what's typed as the page goes,
+// in a request that outlives it.
+addEventListener("pagehide", () => saveComment({ keepalive: true }));
+document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && saveComment({ keepalive: true }));
 
 function undo() {
   if (!editable()) return;

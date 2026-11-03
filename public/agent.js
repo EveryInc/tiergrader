@@ -29,7 +29,7 @@ export function registerAgentTools(ctrl) {
     },
     {
       name: "tiergrader_read_item",
-      description: "Read one item's full text (for markdown, text and HTML files) so you can judge it. Images, PDFs and other files return a link instead.",
+      description: "Read one item's full text (for markdown, text and HTML files) so you can judge it, with the owner's context for it (such as the brief it answers) when there is some. Images, PDFs and other files return a link instead.",
       inputSchema: {
         type: "object",
         properties: { item: { type: "string", description: "The item's id, its number (e.g. \"3\"), or its exact title." } },

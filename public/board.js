@@ -1290,6 +1290,7 @@ const controller = {
       text: text && text.length > 60000 ? `${text.slice(0, 60000)}\n\n[truncated]` : text,
       file_url: it.kind === "link" ? null : location.origin + fileUrl(it),
       link_url: it.link_url,
+      context: full.context || undefined,
       note: text === null ? "No text for this kind of item; open file_url to look at it." : undefined,
     };
   },

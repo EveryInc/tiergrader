@@ -246,8 +246,8 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 .tier-btn[aria-pressed="true"] { background: var(--tier); border: 2px solid var(--ink); }
 .ratings-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--ink-2); font-size: 14px; min-width: 0; }
 .ratings-line .who { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; background: var(--card); border: 1px solid var(--line); color: var(--ink); font-size: 13px; }
-.preview-note { flex: none; padding: 0 16px 12px 32px; background: var(--panel); }
-.comment-box { min-height: 40px; max-height: 30vh; field-sizing: content; font-size: 14px; }
+.preview-note { flex: none; max-height: 30vh; overflow: auto; padding: 0 16px 12px 32px; background: var(--panel); }
+.comment-box { min-height: 40px; max-height: 24vh; field-sizing: content; font-size: 14px; }
 .comment { margin: 0; color: var(--ink-2); font-size: 14px; white-space: pre-wrap; word-break: break-word; }
 .comment + .comment { margin-top: 4px; }
 .comment b { color: var(--ink); font-weight: 600; margin-right: 4px; }

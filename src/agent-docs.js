@@ -70,15 +70,15 @@ ${CREATE_AUTH[mode](base)}
 4. Read the results whenever you like.
 
    \`\`\`sh
-   curl -s {api_url}/results       # JSON: every item's average and rank, each person's tier for it, and each person's full board
-   curl -s {api_url}/results.csv   # one row per file (name, title, average), one column per person, grades in points
+   curl -s {api_url}/results       # JSON: every item's average and rank, each person's tier and comment for it, and each person's full board
+   curl -s {api_url}/results.csv   # one row per file (name, title, average), a grade column (in points) and a comment column per person
    \`\`\`
 
 ## Owner API (\`{api_url}\` = \`${base}/api/o/{owner_token}\`)
 
 | Call | Does |
 |---|---|
-| \`GET {api_url}\` | Collection, items, people (with their links and progress), every placement, and averages |
+| \`GET {api_url}\` | Collection, items, people (with their links and progress), every placement and comment, and averages |
 | \`PATCH {api_url}\` | \`{"title", "description", "show_others"}\`. \`show_others: false\` hides people's rankings from each other (on by default) |
 | \`DELETE {api_url}\` | Deletes the collection and everything in it |
 | \`POST {api_url}/items\` | Add items (multipart files, or JSON as above) |
@@ -89,8 +89,9 @@ ${CREATE_AUTH[mode](base)}
 | \`PATCH {api_url}/raters/{id}\` | \`{"name"}\` |
 | \`DELETE {api_url}/raters/{id}\` | Remove a person and their ranking |
 | \`POST {api_url}/place\` | The owner's own ranking: \`{"moves": [{"item_id", "tier", "position"}]}\`, as on a personal link. It only counts in results once it has something in it |
-| \`GET {api_url}/results\` | Averages, ranks and each person's board |
-| \`GET {api_url}/results.csv\` | Export: one row per file with its name, title and average, and each person's grade in points (S 4 … F -1) |
+| \`POST {api_url}/comment\` | The owner's own comments, as on a personal link |
+| \`GET {api_url}/results\` | Averages, ranks, each person's comments and each person's board |
+| \`GET {api_url}/results.csv\` | Export: one row per file with its name, title and average, each person's grade in points (S 4 … F -1), then each person's comment |
 
 Item files are at \`${base}/f/{item_id}\`.
 
@@ -100,11 +101,12 @@ With their personal link \`${base}/r/{rater_token}\`, the API is \`${base}/api/r
 
 | Call | Does |
 |---|---|
-| \`GET /api/r/{rater_token}/board\` | Their board: tier -> items, plus what is still unsorted |
+| \`GET /api/r/{rater_token}/board\` | Their board: tier -> items (with their \`comment\` on each, if any), plus what is still unsorted |
 | \`GET /api/r/{rater_token}/items/{id}\` | One item with its full text, to read before judging |
 | \`POST /api/r/{rater_token}/place\` | \`{"moves": [{"item_id": "...", "tier": "S", "position": 0}]}\`. \`item_id\` may also be the item's number; \`tier\` is S/A/B/C/D/F or \`unsorted\`; \`position\` (0-based, inside the tier) is optional and defaults to the end |
+| \`POST /api/r/{rater_token}/comment\` | \`{"item_id": "...", "text": "Strong hook, weak ending"}\` or \`{"comments": [...]}\`: why an item is where it is. Replaces their earlier comment on it; empty text removes it. Works on unsorted items too |
 
-An open page updates as soon as the ranking changes.
+An open page updates as soon as the ranking or a comment changes. Everyone who can see a person's tiers sees their comments.
 
 ## In the browser: WebMCP
 
@@ -113,6 +115,7 @@ Every collection page registers WebMCP tools on \`document.modelContext\` (or \`
 - \`tiergrader_get_board\`: who is being viewed, the tiers and their items, and what is unsorted
 - \`tiergrader_read_item\`: the full text of one item
 - \`tiergrader_place_items\`: move items into tiers on your own personal page (cards move on screen)
+- \`tiergrader_comment_items\`: write your own comment on items (why each is where it is)
 - \`tiergrader_view\`: show someone else's ranking, or everyone's average
 - \`tiergrader_get_results\`: averages and every visible person's tiers
 - On the owner page only: \`tiergrader_create_links\` and \`tiergrader_add_text_items\`
@@ -121,7 +124,7 @@ Without WebMCP, the same functions are on \`window.tiergrader\` (\`await tiergra
 
 ## MCP server
 
-\`${base}/mcp\` is a remote MCP server (streamable HTTP, no sign-in) with the same operations: \`request_agent_key\`, \`create_collection\`, \`add_items\`, \`get_collection\`, \`create_rater_links\`, \`get_results\`, \`update_collection\`, \`remove_item\`, \`get_board\`, \`read_item\`, \`place_items\`. Tools take the owner or personal link (or bare token) as an argument.
+\`${base}/mcp\` is a remote MCP server (streamable HTTP, no sign-in) with the same operations: \`request_agent_key\`, \`create_collection\`, \`add_items\`, \`get_collection\`, \`create_rater_links\`, \`get_results\`, \`update_collection\`, \`remove_item\`, \`get_board\`, \`read_item\`, \`place_items\`, \`comment_items\`. Tools take the owner or personal link (or bare token) as an argument.
 `;
 }
 
@@ -141,7 +144,7 @@ ${c.description ? `\nDescription: ${c.description}\n` : ""}
 - Add files: \`curl -s -X POST ${api}/items -F file=@post.md\`, or JSON \`{"items": [{"title", "text"}]}\`
 - Personal links: \`curl -s -X POST ${api}/raters -H 'content-type: application/json' -d '{"names": ["Kieran", "Dan"]}'\`, then send each person their link
 - Open link anyone can join with their name: ${links.join_url}
-- Results: \`GET ${api}/results\` (JSON) or \`${api}/results.csv\`
+- Results: \`GET ${api}/results\` (JSON, with everyone's comments) or \`${api}/results.csv\`
 - With this page open in a browser, WebMCP tools are registered (\`tiergrader_get_board\`, \`tiergrader_get_results\`, \`tiergrader_create_links\`, \`tiergrader_add_text_items\`, ...). Full reference: ${base}/llms.txt
 
 ## Items
@@ -170,7 +173,8 @@ ${tierLines}
 - Board as JSON: \`GET ${api}/board\`
 - Read an item: \`GET ${api}/items/{id}\`
 - Move items: \`curl -s -X POST ${api}/place -H 'content-type: application/json' -d '{"moves": [{"item_id": "<id or number>", "tier": "A"}]}'\` (tier: S, A, B, C, D, F or unsorted)
-- With this page open in a browser, WebMCP tools are registered: \`tiergrader_get_board\`, \`tiergrader_read_item\`, \`tiergrader_place_items\`, \`tiergrader_view\`, \`tiergrader_get_results\`. Full reference: ${base}/llms.txt
+- Comment on an item (why it's in its tier): \`curl -s -X POST ${api}/comment -H 'content-type: application/json' -d '{"item_id": "<id or number>", "text": "Strong hook"}'\` (empty text removes it)
+- With this page open in a browser, WebMCP tools are registered: \`tiergrader_get_board\`, \`tiergrader_read_item\`, \`tiergrader_place_items\`, \`tiergrader_comment_items\`, \`tiergrader_view\`, \`tiergrader_get_results\`. Full reference: ${base}/llms.txt
 
 ## Items
 ${items.map(itemLine).join("\n") || "_None yet._"}

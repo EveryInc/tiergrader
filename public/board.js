@@ -49,10 +49,10 @@ function remember(key, entry) {
   }
 }
 
-async function api(path = "", { method = "GET", json, body } = {}) {
+async function api(path = "", { method = "GET", json, body, keepalive = false } = {}) {
   const headers = { "x-tiergrader-client": CLIENT };
   if (json !== undefined) headers["content-type"] = "application/json";
-  const res = await fetch(API + path, { method, headers, body: json !== undefined ? JSON.stringify(json) : body });
+  const res = await fetch(API + path, { method, headers, body: json !== undefined ? JSON.stringify(json) : body, keepalive });
   const isJson = res.headers.get("content-type")?.includes("json");
   const out = isJson ? await res.json() : await res.text();
   if (!res.ok) throw Object.assign(new Error(out?.error || `Request failed (${res.status})`), { status: res.status });
@@ -94,6 +94,19 @@ const editable = () => state.viewing === me().id;
 const people = () => (state.data.raters.some((r) => r.id === me().id) ? state.data.raters : [me(), ...state.data.raters]);
 const others = () => people().filter((r) => r.id !== me().id);
 const raterName = (id) => people().find((r) => r.id === id)?.name ?? "Someone";
+const commentOf = (raterId, itemId) => state.data.comments.find((m) => m.rater_id === raterId && m.item_id === itemId)?.text ?? "";
+
+// Each card's comments, from the people this page can show.
+function commentsByItem() {
+  const ids = new Set(people().map((r) => r.id));
+  const out = new Map();
+  for (const m of state.data.comments) {
+    if (!ids.has(m.rater_id)) continue;
+    if (!out.has(m.item_id)) out.set(m.item_id, []);
+    out.get(m.item_id).push(m);
+  }
+  return out;
+}
 
 function boardOf(raterId) {
   const lists = Object.fromEntries([...TIER_IDS.map((t) => [t, []]), [UNSORTED, []]]);
@@ -117,11 +130,12 @@ function results() {
 function currentView() {
   if (state.viewing !== "everyone") return { lists: boardOf(state.viewing), extra: null };
   const res = results();
+  const said = commentsByItem();
   const lists = Object.fromEntries([...TIER_IDS.map((t) => [t, []]), [UNSORTED, []]]);
   const extra = new Map();
   for (const row of res.items) {
     lists[row.tier].push(row.id);
-    extra.set(row.id, row);
+    extra.set(row.id, { ...row, comments: said.get(row.id) ?? [] });
   }
   lists[UNSORTED].sort((a, b) => byId.get(a).n - byId.get(b).n);
   return { lists, extra, res };
@@ -165,14 +179,19 @@ function restoreMoves(lists) {
   return moves;
 }
 
+function setComment(itemId, text) {
+  state.data.comments = state.data.comments.filter((m) => m.rater_id !== me().id || m.item_id !== itemId);
+  if (text) state.data.comments.push({ rater_id: me().id, item_id: itemId, text });
+}
+
 // ---------- writing ----------
 
-// A move survives a brief server hiccup (a redeploy, a dropped connection): retry for a few seconds before
-// giving up. Moves set absolute positions, so sending one twice lands the same way.
-async function postMoves(moves) {
+// A write survives a brief server hiccup (a redeploy, a dropped connection): retry for a few seconds before
+// giving up. Moves set absolute positions and comments their whole text, so sending one twice lands the same way.
+async function post(path, json, { keepalive = false } = {}) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await api("/place", { method: "POST", json: { moves } });
+      return await api(path, { method: "POST", json, keepalive });
     } catch (err) {
       const transient = !err.status || err.status >= 500;
       if (!transient || attempt >= 3) throw err;
@@ -181,14 +200,14 @@ async function postMoves(moves) {
   }
 }
 
-function save(moves) {
+function save(path, json, what = "that move", options) {
   state.pendingWrites++;
   writes = writes.then(async () => {
     try {
-      const fresh = await postMoves(moves);
+      const fresh = await post(path, json, options);
       if (state.pendingWrites === 1 && !state.dragging) applyData(fresh);
     } catch (err) {
-      toast(`Couldn't save that move: ${err.message}`);
+      toast(`Couldn't save ${what}: ${err.message}`);
       state.refreshQueued = true;
     } finally {
       state.pendingWrites--;
@@ -219,9 +238,35 @@ function place(moves, { animate = true, record = true, advanceFrom = null } = {}
     const where = moves[0].tier === UNSORTED ? "Unranked" : `${moves[0].tier} tier`;
     toast(advanceFrom && !next ? `${it.title} → ${where}. That's everything ranked.` : `${it.title} → ${where}`);
   }
-  save(moves);
+  save("/place", { moves });
   return true;
 }
+
+// Your comment on a card saves a moment after you stop typing, and when you leave the box.
+let commentTimer;
+let commentDraft = null;
+function draftComment(itemId, text) {
+  commentDraft = { item_id: itemId, text };
+  clearTimeout(commentTimer);
+  commentTimer = setTimeout(() => saveComment(), 800);
+}
+
+function saveComment({ keepalive = false } = {}) {
+  clearTimeout(commentTimer);
+  const draft = commentDraft;
+  commentDraft = null;
+  if (!draft) return;
+  const text = draft.text.trim();
+  if (text === commentOf(me().id, draft.item_id)) return;
+  state.localVersion++;
+  setComment(draft.item_id, text);
+  save("/comment", { comments: [{ item_id: draft.item_id, text }] }, "your comment", { keepalive });
+}
+
+// Closing or reloading the tab skips both the timer and the blur, so send what's typed as the page goes,
+// in a request that outlives it.
+addEventListener("pagehide", () => saveComment({ keepalive: true }));
+document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && saveComment({ keepalive: true }));
 
 function undo() {
   if (!editable()) return;
@@ -335,6 +380,7 @@ app.innerHTML = `
       <div class="preview-head"></div>
       <div class="preview-body"></div>
       <div class="preview-bar"></div>
+      <div class="preview-note"></div>
     </section>
   </div>`;
 const titleWrap = app.querySelector(".title-wrap");
@@ -343,7 +389,7 @@ const actions = app.querySelector(".topbar-actions");
 const boardScroll = app.querySelector(".board-scroll");
 const reader = app.querySelector(".reader");
 const preview = app.querySelector(".preview");
-const [pHead, pBody, pBar] = preview.children;
+const [pHead, pBody, pBar, pNote] = preview.children;
 const TRASH_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>`;
 const pointsLabel = (p) => (p > 0 ? `+${p}` : p < 0 ? `−${-p}` : "0");
 
@@ -433,7 +479,9 @@ function cardHtml(id, extra) {
   }
   const img = it.kind === "image" ? `<img src="${fileUrl(it)}" alt="" loading="lazy" draggable="false">` : "";
   const snip = it.kind !== "image" && it.snippet ? `<span class="snip">${esc(it.snippet)}</span>` : "";
-  return `<div class="${classes.join(" ")}" data-id="${id}" role="button" tabindex="-1" aria-label="${esc(it.title)}" title="${esc(it.title)}">${img}<span class="kind">${KIND_LABEL[it.kind] || ""}</span><span class="title">${esc(it.title)}</span>${snip}${votes}${avg}</div>`;
+  // In the average, hovering a card shows what people said about it.
+  const title = [it.title, ...(extra?.comments ?? []).map((m) => `${commenter(m)}: ${m.text}`)].join("\n");
+  return `<div class="${classes.join(" ")}" data-id="${id}" role="button" tabindex="-1" aria-label="${esc(it.title)}" title="${esc(title)}">${img}<span class="kind">${KIND_LABEL[it.kind] || ""}</span><span class="title">${esc(it.title)}</span>${snip}${votes}${avg}</div>`;
 }
 
 function renderBoard() {
@@ -486,9 +534,13 @@ function setTierTip(id) {
   for (const btn of boardScroll.querySelectorAll("[data-tier-tip]")) btn.setAttribute("aria-expanded", btn.dataset.tierTip === id);
 }
 
+const commenter = (m) => (m.rater_id === me().id ? "You" : raterName(m.rater_id));
+const commentHtml = (m) => `<p class="comment"><b>${esc(commenter(m))}</b> ${esc(m.text)}</p>`;
+
 function tableHtml() {
   const res = results();
   const raters = people();
+  const said = commentsByItem();
   const pill = (t) => (t && t !== UNSORTED ? `<span class="tier-pill" style="--tier:${COLOR[t]}">${t}</span>` : `<span class="tier-pill none">–</span>`);
   const rows = res.items
     .map((row) => `<tr>
@@ -498,10 +550,11 @@ function tableHtml() {
       <td class="num-cell">${row.count}</td>
       <td>${row.avg === null ? pill() : pill(row.tier)}</td>
       ${raters.map((r) => `<td>${pill(row.ratings[r.id])}</td>`).join("")}
+      ${said.size ? `<td class="comments-cell">${(said.get(row.id) ?? []).map(commentHtml).join("")}</td>` : ""}
     </tr>`)
     .join("");
   return `<div class="table-wrap"><table class="results-table">
-    <thead><tr><th>Rank</th><th>Item</th><th>Avg</th><th>Ratings</th><th>Tier</th>${raters.map((r) => `<th>${r.id === me().id ? "You" : esc(r.name)}</th>`).join("")}</tr></thead>
+    <thead><tr><th>Rank</th><th>Item</th><th>Avg</th><th>Ratings</th><th>Tier</th>${raters.map((r) => `<th>${r.id === me().id ? "You" : esc(r.name)}</th>`).join("")}${said.size ? "<th>Comments</th>" : ""}</tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -613,10 +666,27 @@ function renderPreview() {
       <button class="icon-btn" data-act="prev" title="Previous (←)" aria-label="Previous">‹</button>
       <button class="icon-btn" data-act="next" title="Next (→)" aria-label="Next">›</button>
     </div>`;
+  renderNote(it);
   if (previewBodyFor !== it.id) {
     previewBodyFor = it.id;
     renderPreviewBody(it);
   }
+}
+
+// Under the tier buttons: a box for your own comment, or what whoever's on screen said about the card.
+function renderNote(it) {
+  if (editable()) {
+    const box = pNote.querySelector("[data-comment]");
+    // Moves and live updates redraw the reader; leave the box alone while it's being typed in.
+    if (box && box.dataset.comment === it.id && box === document.activeElement) return;
+    pNote.hidden = false;
+    pNote.innerHTML = `<textarea class="input comment-box" data-comment="${it.id}" rows="1" maxlength="4000" placeholder="Add a comment: why this tier?" aria-label="Your comment">${esc(commentOf(me().id, it.id))}</textarea>`;
+    return;
+  }
+  const ids = state.viewing === "everyone" ? people().map((r) => r.id) : [state.viewing];
+  const said = ids.map((id) => ({ rater_id: id, text: commentOf(id, it.id) })).filter((m) => m.text);
+  pNote.hidden = !said.length;
+  pNote.innerHTML = said.map(commentHtml).join("");
 }
 
 function ratingsLine(it) {
@@ -1004,7 +1074,7 @@ function openHelp() {
       <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>Undo</dd>
       <dt><kbd>Esc</kbd></dt><dd>Close the reader and let go of the card</dd>
     </dl>
-    <p style="margin:0;color:var(--muted);font-size:12.5px">After you place a card, the next unranked one opens, so you can read, press a key, read, press a key.</p>`,
+    <p style="margin:0;color:var(--muted);font-size:12.5px">After you place a card, the next unranked one opens, so you can read, press a key, read, press a key. In the comment box under the tiers, keys just type; <kbd>Esc</kbd> leaves it and keeps what you wrote.</p>`,
   );
 }
 
@@ -1057,8 +1127,22 @@ app.addEventListener("click", (e) => {
 // Read-only fields (links) select themselves on focus; inline handlers are blocked by the page's CSP.
 document.addEventListener("focusin", (e) => e.target.matches?.("[data-select]") && e.target.select());
 
+let commentOnFocus = "";
+app.addEventListener("focusin", (e) => {
+  if (e.target.matches("[data-comment]")) commentOnFocus = e.target.value.trim();
+});
+
+app.addEventListener("input", (e) => {
+  if (e.target.matches("[data-comment]")) draftComment(e.target.dataset.comment, e.target.value);
+});
+
 app.addEventListener("focusout", (e) => {
   if (e.target.isContentEditable) saveEdit(e.target);
+  if (e.target.matches("[data-comment]")) {
+    saveComment();
+    const text = e.target.value.trim();
+    if (text !== commentOnFocus) toast(text ? "Comment saved" : "Comment removed");
+  }
 });
 
 const KEY_TIERS = { s: "S", a: "A", b: "B", c: "C", d: "D", f: "F", 4: "S", 3: "A", 2: "B", 1: "C", 0: "D", "-": "F", "−": "F", u: UNSORTED };
@@ -1086,6 +1170,11 @@ document.addEventListener("keydown", (e) => {
       el.textContent = byId.get(el.dataset.editItem)?.title ?? el.textContent;
       el.blur();
     }
+    return;
+  }
+  // Keys type into the comment box instead of placing the card; Esc leaves it, keeping what's written.
+  if (el?.matches?.("[data-comment]")) {
+    if (e.key === "Escape") el.blur();
     return;
   }
   if (document.querySelector("dialog[open]") || /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName)) return;
@@ -1202,6 +1291,16 @@ const brief = (id) => {
   return { id: it.id, n: it.n, title: it.title, kind: it.kind };
 };
 
+// What the people on screen said about an item: the one person's comment, or everyone's.
+function saidAbout(id, extra) {
+  if (extra) {
+    const list = extra.get(id).comments;
+    return list.length ? { comments: list.map((m) => ({ name: raterName(m.rater_id), text: m.text })) } : {};
+  }
+  const text = commentOf(state.viewing, id);
+  return text ? { comment: text } : {};
+}
+
 const controller = {
   role: boot.role,
   getBoard() {
@@ -1213,8 +1312,10 @@ const controller = {
       viewing,
       editable: editable(),
       scoring: POINTS,
-      tiers: Object.fromEntries(TIER_IDS.map((t) => [t, lists[t].map((id) => (extra ? { ...brief(id), rank: extra.get(id).rank, average: extra.get(id).avg } : brief(id)))])),
-      unranked: lists[UNSORTED].map(brief),
+      tiers: Object.fromEntries(
+        TIER_IDS.map((t) => [t, lists[t].map((id) => ({ ...brief(id), ...(extra ? { rank: extra.get(id).rank, average: extra.get(id).avg } : {}), ...saidAbout(id, extra) }))]),
+      ),
+      unranked: lists[UNSORTED].map((id) => ({ ...brief(id), ...saidAbout(id, extra) })),
       people: state.data.raters.map((r) => ({ name: r.name, ranked: rankedCount(r.id), total: items().length })),
     };
   },
@@ -1247,6 +1348,21 @@ const controller = {
     place(moves);
     return controller.getBoard();
   },
+  commentItems(list) {
+    if (!Array.isArray(list) || !list.length) throw new Error("Give comments: [{ item, text }].");
+    if (state.viewing !== me().id) setViewing(me().id);
+    const comments = list.map((c) => {
+      const it = resolveItem(c.item ?? c.item_id ?? c.id);
+      if (!it) throw new Error(`No item "${c.item ?? c.item_id}".`);
+      if (typeof c.text !== "string") throw new Error("Each comment needs text (an empty string removes it).");
+      return { item_id: it.id, text: c.text.trim() };
+    });
+    state.localVersion++;
+    for (const c of comments) setComment(c.item_id, c.text);
+    render();
+    save("/comment", { comments }, "those comments");
+    return controller.getBoard();
+  },
   view(person) {
     const v = resolveView(person);
     if (!v) throw new Error(`No one called "${person}" here. People: ${state.data.raters.map((r) => r.name).join(", ") || "none yet"}.`);
@@ -1256,6 +1372,7 @@ const controller = {
   },
   getResults() {
     const res = results();
+    const said = commentsByItem();
     return {
       scoring: POINTS,
       items: res.items.map((r) => ({
@@ -1267,6 +1384,7 @@ const controller = {
         ratings_count: r.count,
         consensus_tier: r.tier,
         ratings: Object.fromEntries(Object.entries(r.ratings).map(([rid, t]) => [raterName(rid), t])),
+        comments: Object.fromEntries((said.get(r.id) ?? []).map((m) => [raterName(m.rater_id), m.text])),
       })),
       people: res.raters.map((r) => ({ name: r.name, ranked: r.ranked, total: r.total })),
     };

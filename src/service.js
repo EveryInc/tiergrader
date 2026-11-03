@@ -52,13 +52,14 @@ export function createService(store, { broadcast = () => {} } = {}) {
     return out;
   }
 
-  // The owner's own ranking only counts (in averages, results, people lists) once they've placed something.
+  // The owner's own ranking only counts (in averages, results, people lists) once they've placed or commented on something.
   function snapshot(c) {
     const items = store.listItems(c.id);
     const placements = store.listPlacements(c.id);
-    const placed = new Set(placements.map((p) => p.rater_id));
+    const comments = store.listComments(c.id);
+    const placed = new Set([...placements, ...comments].map((p) => p.rater_id));
     const raters = store.listRaters(c.id).filter((r) => r.id !== c.owner_rater_id || placed.has(r.id));
-    return { items, raters, placements };
+    return { items, raters, placements, comments };
   }
 
   const service = {
@@ -66,7 +67,7 @@ export function createService(store, { broadcast = () => {} } = {}) {
 
     ownerView(c, base) {
       const me = store.ownerRater(c);
-      const { items, raters, placements } = snapshot(c);
+      const { items, raters, placements, comments } = snapshot(c);
       const results = computeResults(items, raters, placements);
       const progress = new Map(results.raters.map((r) => [r.id, r.ranked]));
       return {
@@ -86,13 +87,14 @@ export function createService(store, { broadcast = () => {} } = {}) {
           updated_at: r.updated_at,
         })),
         placements,
+        comments,
         results,
       };
     },
 
     raterView(rater, base) {
       const c = store.getCollection(rater.collection_id);
-      const { items, raters, placements } = snapshot(c);
+      const { items, raters, placements, comments } = snapshot(c);
       // Guests (people trying an example) see the example's own graders, never each other.
       const visible = c.show_others ? raters.filter((r) => !r.guest || r.id === rater.id) : [rater];
       const ids = new Set(visible.map((r) => r.id));
@@ -106,13 +108,14 @@ export function createService(store, { broadcast = () => {} } = {}) {
         items: items.map((it) => publicItem(it, base, false)),
         raters: visible.map((r) => ({ id: r.id, name: r.name, ranked: progress.get(r.id), total: items.length, updated_at: r.updated_at })),
         placements: placements.filter((p) => ids.has(p.rater_id)),
+        comments: comments.filter((m) => ids.has(m.rater_id)),
         results,
       };
     },
 
-    // A readable summary for agents: every item's average and each person's board by title.
+    // A readable summary for agents: every item's average, what each person said about it, and each person's board by title.
     resultsView(c, base) {
-      const { items, raters, placements } = snapshot(c);
+      const { items, raters, placements, comments } = snapshot(c);
       const results = computeResults(items, raters, placements);
       const names = new Map(raters.map((r) => [r.id, r.name]));
       const itemById = new Map(items.map((it) => [it.id, it]));
@@ -130,6 +133,7 @@ export function createService(store, { broadcast = () => {} } = {}) {
           ratings_count: row.count,
           consensus_tier: row.tier,
           ratings: Object.entries(row.ratings).map(([rid, tier]) => ({ name: names.get(rid), rater_id: rid, tier })),
+          comments: comments.filter((m) => m.item_id === row.id && names.has(m.rater_id)).map((m) => ({ name: names.get(m.rater_id), rater_id: m.rater_id, text: m.text })),
         })),
         people: raters.map((r) => ({
           rater_id: r.id,
@@ -145,7 +149,7 @@ export function createService(store, { broadcast = () => {} } = {}) {
     },
 
     resultsCsv(c) {
-      const { items, raters, placements } = snapshot(c);
+      const { items, raters, placements, comments } = snapshot(c);
       const results = computeResults(items, raters, placements);
       const esc = (v) => {
         let s = v === null || v === undefined ? "" : String(v);
@@ -153,22 +157,26 @@ export function createService(store, { broadcast = () => {} } = {}) {
         if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
         return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
       };
-      // One row per file, best first: its name, title and average, then each person's grade in points.
+      // One row per file, best first: its name, title and average, then each person's grade in points, then
+      // each person's comment (after the grades, so the grade columns stay together).
       const files = new Map(items.map((it) => [it.id, it.filename || it.url || ""]));
-      const header = ["rank", "file", "title", "average", ...raters.map((r) => r.name)];
+      const said = new Map(comments.map((m) => [`${m.rater_id} ${m.item_id}`, m.text]));
+      const header = ["rank", "file", "title", "average", ...raters.map((r) => r.name), ...raters.map((r) => `${r.name} comment`)];
       const lines = [header.map(esc).join(",")];
       for (const row of results.items) {
         const grades = raters.map((r) => (row.ratings[r.id] ? SCORING[row.ratings[r.id]] : ""));
-        lines.push([row.rank, files.get(row.id), row.title, row.avg, ...grades].map(esc).join(","));
+        const notes = raters.map((r) => said.get(`${r.id} ${row.id}`) ?? "");
+        lines.push([row.rank, files.get(row.id), row.title, row.avg, ...grades, ...notes].map(esc).join(","));
       }
       return lines.join("\n") + "\n";
     },
 
-    // The board of one person, by title, for agents acting on that person's link.
+    // The board of one person, by title (with their comment where they left one), for agents acting on that person's link.
     raterBoard(rater, base) {
       const c = store.getCollection(rater.collection_id);
       const items = store.listItems(c.id);
       const placements = store.listPlacements(c.id).filter((p) => p.rater_id === rater.id);
+      const said = new Map(store.listComments(c.id).filter((m) => m.rater_id === rater.id).map((m) => [m.item_id, m.text]));
       const itemById = new Map(items.map((it) => [it.id, it]));
       const board = boards(items, [rater], placements)[rater.id];
       return {
@@ -177,7 +185,10 @@ export function createService(store, { broadcast = () => {} } = {}) {
         url: `${base}/r/${rater.token}`,
         scoring: SCORING,
         board: Object.fromEntries(
-          Object.entries(board).map(([tier, ids]) => [tier, ids.map((id) => ({ id, n: itemById.get(id).n, title: itemById.get(id).title }))]),
+          Object.entries(board).map(([tier, ids]) => [
+            tier,
+            ids.map((id) => ({ id, n: itemById.get(id).n, title: itemById.get(id).title, ...(said.has(id) ? { comment: said.get(id) } : {}) })),
+          ]),
         ),
       };
     },
@@ -260,6 +271,21 @@ export function createService(store, { broadcast = () => {} } = {}) {
         return { item_id: it.id, tier: m.tier, position: m.position };
       });
       store.place(rater, resolved);
+      broadcast(rater.collection_id, source);
+    },
+
+    // comments: [{ item_id, text }], item_id as in place. Empty text removes that comment.
+    comment(rater, comments, source) {
+      if (!Array.isArray(comments) || !comments.length) throw httpError(400, "Give at least one comment: { item_id, text }.");
+      const items = store.listItems(rater.collection_id);
+      const resolved = comments.map((m) => {
+        const key = m?.item_id ?? m?.id ?? m?.item ?? m?.n;
+        const it = items.find((x) => x.id === key || String(x.n) === String(key));
+        if (!it) throw httpError(400, `No item "${key}" in this collection.`);
+        if (typeof m.text !== "string") throw httpError(400, "Each comment needs text (an empty string removes it).");
+        return { item_id: it.id, text: m.text };
+      });
+      store.comment(rater, resolved);
       broadcast(rater.collection_id, source);
     },
   };

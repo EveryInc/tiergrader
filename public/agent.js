@@ -10,11 +10,13 @@ export function registerAgentTools(ctrl) {
     getBoard: () => ctrl.getBoard(),
     readItem: (item) => ctrl.readItem(item),
     placeItems: (placements) => ctrl.placeItems(placements),
+    commentItems: (comments) => ctrl.commentItems(comments),
     view: (person) => ctrl.view(person),
     getResults: () => ctrl.getResults(),
     ...(owner ? { createLinks: (names) => ctrl.createLinks(names), addTextItems: (items) => ctrl.addTextItems(items) } : {}),
     help:
       "tiergrader page API. getBoard(); readItem(idOrNumber); placeItems([{item, tier, position?}]) with tier S/A/B/C/D/F/unranked; " +
+      "commentItems([{item, text}]); " +
       "view('me' | 'everyone' | name); getResults()" + (owner ? "; createLinks(['Kieran', 'Dan']); addTextItems([{title, text}])" : ""),
   };
 
@@ -47,7 +49,7 @@ export function registerAgentTools(ctrl) {
     },
     {
       name: "tiergrader_get_results",
-      description: "Every item's average score, rank and consensus tier, with each visible person's tier for it.",
+      description: "Every item's average score, rank and consensus tier, with each visible person's tier and comment for it.",
       inputSchema: { type: "object", properties: {} },
       annotations: { readOnlyHint: true },
       execute: async () => json(ctrl.getResults()),
@@ -78,6 +80,28 @@ export function registerAgentTools(ctrl) {
         required: ["placements"],
       },
       execute: async ({ placements }) => json(ctrl.placeItems(placements)),
+    }, {
+      name: "tiergrader_comment_items",
+      description:
+        "Write this page's own comment on items (the person's, or the owner's on an owner page): why each is in its tier. It shows under the card and saves immediately. Empty text removes it. Only comment when the person asked you to.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          comments: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                item: { type: "string", description: "Item id, number, or exact title." },
+                text: { type: "string" },
+              },
+              required: ["item", "text"],
+            },
+          },
+        },
+        required: ["comments"],
+      },
+      execute: async ({ comments }) => json(ctrl.commentItems(comments)),
     });
 
   if (owner) {

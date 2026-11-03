@@ -78,7 +78,7 @@ const TOOLS = [
   },
   {
     name: "get_results",
-    description: "Results so far: every item's average score (S=4 A=3 B=2 C=1 D=0 F=-1), rank and consensus tier, each person's tier for it, and each person's full board.",
+    description: "Results so far: every item's average score (S=4 A=3 B=2 C=1 D=0 F=-1), rank and consensus tier, each person's tier and comment for it, and each person's full board.",
     inputSchema: { type: "object", properties: { ...ownerArg }, required: ["owner"] },
     annotations: { readOnlyHint: true },
   },
@@ -99,7 +99,7 @@ const TOOLS = [
   },
   {
     name: "get_board",
-    description: "One person's current ranking: tier -> items, plus what they haven't placed yet.",
+    description: "One person's current ranking: tier -> items (with their comment on each, where they left one), plus what they haven't placed yet.",
     inputSchema: { type: "object", properties: { ...raterArg }, required: ["person"] },
     annotations: { readOnlyHint: true },
   },
@@ -134,6 +134,28 @@ const TOOLS = [
         },
       },
       required: ["person", "moves"],
+    },
+  },
+  {
+    name: "comment_items",
+    description: "Write one person's comment on items: why each is in its tier. Replaces their earlier comment on that item; empty text removes it. Only do this when that person asked you to.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...raterArg,
+        comments: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              item_id: { type: "string", description: "Item id or number." },
+              text: { type: "string" },
+            },
+            required: ["item_id", "text"],
+          },
+        },
+      },
+      required: ["person", "comments"],
     },
   },
 ];
@@ -194,6 +216,11 @@ export function createMcpHandler({ store, service, version }) {
       case "place_items": {
         const r = rater(args);
         service.place(r, args.moves, "mcp");
+        return service.raterBoard(r, base);
+      }
+      case "comment_items": {
+        const r = rater(args);
+        service.comment(r, args.comments, "mcp");
         return service.raterBoard(r, base);
       }
       default:

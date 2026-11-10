@@ -135,6 +135,15 @@ export function createApp({
       ...(originTrialToken ? { "origin-trial": originTrialToken } : {}),
     });
   const markdown = (res, body) => send(res, 200, body, { "content-type": "text/markdown; charset=utf-8", "cache-control": "no-store", ...CORS });
+  // Downloads as "<collection title>.csv".
+  const sendCsv = (res, c, body) => {
+    const name = c.title.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "results";
+    return send(res, 200, body, {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="${name}.csv"`,
+      ...CORS,
+    });
+  };
 
   async function readBody(req, limit) {
     const declared = Number(req.headers["content-length"] || 0);
@@ -528,14 +537,7 @@ export function createApp({
         }
       }
       if (sub === "/results" && method === "GET") return json(res, 200, service.resultsView(c, base));
-      if (sub === "/results.csv" && method === "GET") {
-        const name = c.title.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "results";
-        return send(res, 200, service.resultsCsv(c), {
-          "content-type": "text/csv; charset=utf-8",
-          "content-disposition": `attachment; filename="${name}.csv"`,
-          ...CORS,
-        });
-      }
+      if (sub === "/results.csv" && method === "GET") return sendCsv(res, c, service.resultsCsv(c));
     }
 
     // Personal (rater) API
@@ -545,6 +547,10 @@ export function createApp({
       let s;
       if (sub === "" && method === "GET") return json(res, 200, service.raterView(r, base));
       if (sub === "/board" && method === "GET") return json(res, 200, service.raterBoard(r, base));
+      if (sub === "/results.csv" && method === "GET") {
+        const c = store.getCollection(r.collection_id);
+        return sendCsv(res, c, service.resultsCsv(c, r));
+      }
       if ((s = sub.match(/^\/items\/([0-9a-z]+)$/)) && method === "GET") return json(res, 200, service.readItem(r.collection_id, s[1], base));
       if (sub === "/place" && method === "POST") {
         const body = await readJson(req);

@@ -102,6 +102,7 @@ With their personal link \`${base}/r/{rater_token}\`, the API is \`${base}/api/r
 |---|---|
 | \`GET /api/r/{rater_token}/board\` | Their board: tier -> items, plus what is still unsorted |
 | \`GET /api/r/{rater_token}/items/{id}\` | One item with its full text, to read before judging |
+| \`GET /api/r/{rater_token}/results.csv\` | Export the rankings this person can see: one row per file with its title and average, and each visible person's grade in points (no file names) |
 | \`POST /api/r/{rater_token}/place\` | \`{"moves": [{"item_id": "...", "tier": "S", "position": 0}]}\`. \`item_id\` may also be the item's number; \`tier\` is S/A/B/C/D/F or \`unsorted\`; \`position\` (0-based, inside the tier) is optional and defaults to the end |
 
 An open page updates as soon as the ranking changes.
@@ -169,6 +170,7 @@ ${tierLines}
 
 - Board as JSON: \`GET ${api}/board\`
 - Read an item: \`GET ${api}/items/{id}\`
+- Results as CSV (the rankings this page shows): \`GET ${api}/results.csv\`
 - Move items: \`curl -s -X POST ${api}/place -H 'content-type: application/json' -d '{"moves": [{"item_id": "<id or number>", "tier": "A"}]}'\` (tier: S, A, B, C, D, F or unsorted)
 - With this page open in a browser, WebMCP tools are registered: \`tiergrader_get_board\`, \`tiergrader_read_item\`, \`tiergrader_place_items\`, \`tiergrader_view\`, \`tiergrader_get_results\`. Full reference: ${base}/llms.txt
 

@@ -61,6 +61,10 @@ export function createService(store, { broadcast = () => {} } = {}) {
     return { items, raters, placements };
   }
 
+  // Whose rankings a personal link sees. Guests (people trying an example) see the example's own
+  // graders, never each other; with show_others off, everyone sees only their own.
+  const visibleTo = (c, rater, raters) => (c.show_others ? raters.filter((r) => !r.guest || r.id === rater.id) : [rater]);
+
   const service = {
     links,
 
@@ -93,8 +97,7 @@ export function createService(store, { broadcast = () => {} } = {}) {
     raterView(rater, base) {
       const c = store.getCollection(rater.collection_id);
       const { items, raters, placements } = snapshot(c);
-      // Guests (people trying an example) see the example's own graders, never each other.
-      const visible = c.show_others ? raters.filter((r) => !r.guest || r.id === rater.id) : [rater];
+      const visible = visibleTo(c, rater, raters);
       const ids = new Set(visible.map((r) => r.id));
       const results = computeResults(items, visible, placements.filter((p) => ids.has(p.rater_id)));
       const progress = new Map(results.raters.map((r) => [r.id, r.ranked]));
@@ -144,9 +147,14 @@ export function createService(store, { broadcast = () => {} } = {}) {
       };
     },
 
-    resultsCsv(c) {
-      const { items, raters, placements } = snapshot(c);
-      const results = computeResults(items, raters, placements);
+    // `viewer` is a personal link's rater: their export holds only the rankings their page shows, and no
+    // file names, which raters never see.
+    resultsCsv(c, viewer = null) {
+      const snap = snapshot(c);
+      const { items } = snap;
+      const raters = viewer ? visibleTo(c, viewer, snap.raters) : snap.raters;
+      const ids = new Set(raters.map((r) => r.id));
+      const results = computeResults(items, raters, snap.placements.filter((p) => ids.has(p.rater_id)));
       const esc = (v) => {
         let s = v === null || v === undefined ? "" : String(v);
         // Titles and names are typed by others: stop spreadsheets reading them as formulas.
@@ -155,11 +163,12 @@ export function createService(store, { broadcast = () => {} } = {}) {
       };
       // One row per file, best first: its name, title and average, then each person's grade in points.
       const files = new Map(items.map((it) => [it.id, it.filename || it.url || ""]));
-      const header = ["rank", "file", "title", "average", ...raters.map((r) => r.name)];
+      const file = (id) => (viewer ? [] : [files.get(id)]);
+      const header = ["rank", ...(viewer ? [] : ["file"]), "title", "average", ...raters.map((r) => r.name)];
       const lines = [header.map(esc).join(",")];
       for (const row of results.items) {
         const grades = raters.map((r) => (row.ratings[r.id] ? SCORING[row.ratings[r.id]] : ""));
-        lines.push([row.rank, files.get(row.id), row.title, row.avg, ...grades].map(esc).join(","));
+        lines.push([row.rank, ...file(row.id), row.title, row.avg, ...grades].map(esc).join(","));
       }
       return lines.join("\n") + "\n";
     },
